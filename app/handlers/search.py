@@ -10,6 +10,7 @@ from aiogram.filters import StateFilter
 from app.database.models import SearchCache, UserFavorites
 from app.services.anilist import search_anilist
 from app.services.scraper import search_anime_scraper
+from app.utils.logging_config import logger
 
 router = Router(name="search")
 
@@ -28,6 +29,8 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
     if not query:
         return
 
+    logger.info(f"Starting search for anime: '{query}' (User ID: {message.from_user.id})")
+
     # Check search cache first
     stmt = select(SearchCache).where(SearchCache.query_text == query)
     res = await db_session.execute(stmt)
@@ -37,6 +40,7 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
 
     # If cached and not expired (24h)
     if cached and (datetime.now(timezone.utc) - cached.created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
+        logger.info(f"Cache hit for search query: '{query}' (AniList ID: {cached.anilist_id})")
         resolved_anime.append({
             "anilist_id": cached.anilist_id,
             "title_english": cached.title_english,
@@ -45,6 +49,7 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
             "image_url": cached.image_url
         })
     else:
+        logger.info(f"Cache miss or expired for search query: '{query}'. Resolving via AniList GraphQL API...")
         # Resolve via AniList GraphQL
         status_msg = await message.answer("🔍 Normalizing query using AniList...")
         try:
@@ -52,6 +57,7 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
             await status_msg.delete()
             
             if not anilist_results:
+                logger.info(f"AniList returned 0 results for query: '{query}'")
                 await message.answer("❌ No matching anime found on AniList. Try double-checking your query.")
                 return
                 
@@ -60,7 +66,7 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
             # Cache the top result
             top_result = anilist_results[0]
             if cached:
-                # Update expired entry
+                logger.info(f"Updating expired cache entry for query: '{query}'")
                 cached.anilist_id = top_result["anilist_id"]
                 cached.title_english = top_result["title_english"]
                 cached.title_romaji = top_result["title_romaji"]
@@ -68,7 +74,7 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
                 cached.image_url = top_result["image_url"]
                 cached.created_at = datetime.now(timezone.utc)
             else:
-                # Add new entry
+                logger.info(f"Creating new cache entry for query: '{query}'")
                 new_cache = SearchCache(
                     query_text=query,
                     anilist_id=top_result["anilist_id"],
@@ -81,6 +87,7 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
             await db_session.commit()
             
         except Exception as e:
+            logger.exception("Error in process during query normalization")
             try:
                 await status_msg.delete()
             except Exception:
@@ -92,7 +99,6 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
     keyboard_buttons = []
     for anime in resolved_anime[:5]:
         title = anime["title_english"] or anime["title_romaji"]
-        # Max length of callback data is 64 bytes. Let's send anilist_id
         keyboard_buttons.append([
             InlineKeyboardButton(
                 text=title[:40] + "..." if len(title) > 43 else title,
@@ -114,6 +120,7 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
     Displays cover image/details and transitions to FSM state to prompt for episode.
     """
     anilist_id = int(callback.data.split(":")[1])
+    logger.info(f"Anime selection triggered (AniList ID: {anilist_id}, User ID: {callback.from_user.id})")
     
     # Retrieve details from search_cache
     stmt = select(SearchCache).where(SearchCache.anilist_id == anilist_id)
@@ -121,10 +128,12 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
     cache_entry = res.scalars().first()
     
     if not cache_entry:
+        logger.warning(f"Anime cache entry not found for AniList ID: {anilist_id}")
         await callback.answer("❌ Anime cache details not found. Please search again.", show_alert=True)
         return
         
     title = cache_entry.title_english or cache_entry.title_romaji
+    logger.info(f"Loaded anime details from cache: '{title}'")
     
     # Store anime details in FSM context
     await state.update_data(
@@ -169,6 +178,7 @@ async def handle_add_favorite(callback: CallbackQuery, db_session: AsyncSession)
     """
     anilist_id = int(callback.data.split(":")[1])
     user_id = callback.from_user.id
+    logger.info(f"Add favorite triggered (AniList ID: {anilist_id}, User ID: {user_id})")
 
     # Retrieve title from search cache
     stmt = select(SearchCache).where(SearchCache.anilist_id == anilist_id)
@@ -176,6 +186,7 @@ async def handle_add_favorite(callback: CallbackQuery, db_session: AsyncSession)
     cache_entry = res.scalars().first()
 
     if not cache_entry:
+        logger.warning(f"Cache entry not found during favorite addition for AniList ID: {anilist_id}")
         await callback.answer("❌ Anime details not found in cache. Search again.", show_alert=True)
         return
 
@@ -189,6 +200,7 @@ async def handle_add_favorite(callback: CallbackQuery, db_session: AsyncSession)
     existing_fav = fav_res.scalar_one_or_none()
 
     if existing_fav:
+        logger.info(f"Anime '{title}' is already in favorites for User ID: {user_id}")
         await callback.answer(f"⭐ '{title}' is already in your favorites!", show_alert=False)
         return
 
@@ -202,8 +214,9 @@ async def handle_add_favorite(callback: CallbackQuery, db_session: AsyncSession)
         db_session.add(new_fav)
         await db_session.commit()
         
-        # Display confirmation toast (brief message at the top of screen)
+        logger.info(f"Successfully added '{title}' (AniList ID: {anilist_id}) to favorites for User ID: {user_id}")
         await callback.answer(f"✅ Added '{title}' to Favorites!", show_alert=False)
     except Exception as e:
+        logger.exception("Error in process while adding favorite")
         await db_session.rollback()
         await callback.answer(f"❌ Failed to save: {e}", show_alert=True)

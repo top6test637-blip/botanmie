@@ -1,0 +1,246 @@
+[2026-07-03 17:24:21] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-03 17:24:23] [INFO] [bot] [test_services.py:94]: === STARTING LIVE ANI-NEKO MIGRATION VERIFICATION ===
+[2026-07-03 17:24:23] [INFO] [bot] [test_services.py:97]: --- 1. Testing Database Init ---
+[2026-07-03 17:24:23] [INFO] [bot] [test_services.py:101]: --- 2. Testing AniList GraphQL ---
+[2026-07-03 17:24:23] [INFO] [bot] [anilist.py:69]: Starting search on AniList for query: Naruto
+[2026-07-03 17:24:23] [INFO] [bot] [anilist.py:74]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:23] [INFO] [bot] [anilist.py:86]: Scraping page: https://graphql.anilist.co (Direct Media Query)
+[2026-07-03 17:24:25] [INFO] [bot] [anilist.py:123]: AniList search returned 5 normalized titles.
+[2026-07-03 17:24:25] [INFO] [bot] [test_services.py:108]: [SUCCESS] AniList resolved: Naruto (ID: 20)
+[2026-07-03 17:24:25] [INFO] [bot] [test_services.py:111]: --- 3. Testing AniNeko Search Scraper ---
+[2026-07-03 17:24:25] [INFO] [bot] [scraper.py:118]: Starting search for anime: Naruto
+[2026-07-03 17:24:25] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/browser?keyword=Naruto via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:25] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:27] [INFO] [bot] [scraper.py:156]: Found 26 search results on AniNeko.
+[2026-07-03 17:24:27] [INFO] [bot] [test_services.py:117]: [SUCCESS] AniNeko matched slug: 'naruto-the-movie-2-legend-of-the-stone-of-gelel' | Title: 'Naruto the Movie 2: Legend of the Stone of Gelel'
+[2026-07-03 17:24:27] [INFO] [bot] [test_services.py:120]: --- 4. Testing AniNeko Episode Scraper ---
+[2026-07-03 17:24:27] [INFO] [bot] [scraper.py:166]: Fetching episodes list for anime slug: naruto-the-movie-2-legend-of-the-stone-of-gelel
+[2026-07-03 17:24:27] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:27] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:28] [INFO] [bot] [scraper.py:211]: Parsed 1 episodes for anime slug: naruto-the-movie-2-legend-of-the-stone-of-gelel
+[2026-07-03 17:24:28] [INFO] [bot] [test_services.py:125]: [SUCCESS] AniNeko parsed 1 episodes.
+[2026-07-03 17:24:28] [INFO] [bot] [test_services.py:127]: First Episode details: {'ep_number': '1', 'play_url': 'https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1'}
+[2026-07-03 17:24:28] [INFO] [bot] [test_services.py:130]: --- 5. Testing Download Links Scraper ---
+[2026-07-03 17:24:28] [INFO] [bot] [scraper.py:222]: Scraping download links from watch page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1
+[2026-07-03 17:24:28] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:28] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:29] [INFO] [bot] [scraper.py:39]: Scraping page: https://vivibebe.site/e468d3e4c2008509 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:29] [INFO] [bot] [scraper.py:42]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:31] [INFO] [bot] [scraper.py:60]: Resolved master .m3u8 playlist: https://vivibebe.site/public/stream/e468d3e4c2008509/master.m3u8
+[2026-07-03 17:24:31] [INFO] [bot] [scraper.py:70]: Scraping page: https://vivibebe.site/public/stream/e468d3e4c2008509/master.m3u8 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:31] [INFO] [bot] [scraper.py:73]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:31] [INFO] [bot] [scraper.py:108]: Parsed qualities from master playlist: ['360p', '720p', '1080p']
+[2026-07-03 17:24:31] [INFO] [bot] [scraper.py:39]: Scraping page: https://vivibebe.site/2267f3273e858575 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:31] [INFO] [bot] [scraper.py:42]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:32] [INFO] [bot] [scraper.py:60]: Resolved master .m3u8 playlist: https://vivibebe.site/public/stream/2267f3273e858575/master.m3u8
+[2026-07-03 17:24:32] [INFO] [bot] [scraper.py:70]: Scraping page: https://vivibebe.site/public/stream/2267f3273e858575/master.m3u8 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:32] [INFO] [bot] [scraper.py:73]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:32] [INFO] [bot] [scraper.py:108]: Parsed qualities from master playlist: ['360p', '720p', '1080p']
+[2026-07-03 17:24:32] [INFO] [bot] [scraper.py:271]: Resolved 3 download link qualities: ['360p', '720p', '1080p']
+[2026-07-03 17:24:32] [INFO] [bot] [test_services.py:135]: [SUCCESS] Resolved streaming qualities: ['360p', '720p', '1080p']
+[2026-07-03 17:24:32] [INFO] [bot] [test_services.py:138]: --- 6. Testing HLS Size Estimation & PNG Stripping ---
+[2026-07-03 17:24:32] [INFO] [bot] [downloader.py:37]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:24:32] [INFO] [bot] [downloader.py:43]: Estimating HLS stream size for playlist: https://vivibebe.site/public/stream/2267f3273e858575/254793360.m3u8
+[2026-07-03 17:24:36] [ERROR] [bot] [downloader.py:78]: Error in process while estimating HLS playlist size
+Traceback (most recent call last):
+  File "c:\Users\monsm\OneDrive\Desktop\BOT\app\services\downloader.py", line 60, in get_url_file_size
+    text = await sub_resp.text()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client_reqrep.py", line 762, in text
+    return self._body.decode(encoding, errors=errors)  # type: ignore[union-attr]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte
+[2026-07-03 17:24:36] [INFO] [bot] [test_services.py:145]: [SUCCESS] Estimated Size for 360p: 100.00 MB
+[2026-07-03 17:24:36] [INFO] [bot] [test_services.py:32]: [TEST] Fetching HLS variant playlist for partial download: https://vivibebe.site/public/stream/2267f3273e858575/254793360.m3u8
+[2026-07-03 17:24:37] [INFO] [bot] [test_services.py:53]: [TEST] Found 580 segments. Downloading first 2 segments...
+[2026-07-03 17:24:38] [INFO] [bot] [test_services.py:63]: [TEST] Confirmed first segment is PNG wrapped.
+[2026-07-03 17:24:38] [INFO] [bot] [test_services.py:69]: [TEST] Downloading segment 1: https://p16-ad-sg.ibyteimg.com/obj/ad-site-i18n/202603265d0d3b06cea8fcbf4a34aa3d
+[2026-07-03 17:24:39] [INFO] [bot] [test_services.py:76]: [TEST] Segment 1 appended. Size: 673604 bytes
+[2026-07-03 17:24:39] [INFO] [bot] [test_services.py:69]: [TEST] Downloading segment 2: https://p16-ad-sg.ibyteimg.com/obj/ad-site-i18n/202603265d0df7a27f62b8894232b2ea
+[2026-07-03 17:24:41] [INFO] [bot] [test_services.py:76]: [TEST] Segment 2 appended. Size: 234248 bytes
+[2026-07-03 17:24:41] [INFO] [bot] [test_services.py:82]: [TEST] Combined file header (hex): 474000100000b00d0001
+[2026-07-03 17:24:41] [INFO] [bot] [test_services.py:84]: [TEST] SUCCESS: Output file has valid MPEG-TS sync byte (0x47)!
+[2026-07-03 17:24:41] [INFO] [bot] [test_services.py:151]: [SUCCESS] AniNeko Scraper & HLS Wrapper validation PASSED!
+[2026-07-03 17:24:41] [INFO] [bot] [test_services.py:162]: === VERIFICATION COMPLETED ===
+[2026-07-03 17:25:09] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-03 17:25:11] [INFO] [bot] [test_services.py:94]: === STARTING LIVE ANI-NEKO MIGRATION VERIFICATION ===
+[2026-07-03 17:25:11] [INFO] [bot] [test_services.py:97]: --- 1. Testing Database Init ---
+[2026-07-03 17:25:11] [INFO] [bot] [test_services.py:101]: --- 2. Testing AniList GraphQL ---
+[2026-07-03 17:25:11] [INFO] [bot] [anilist.py:69]: Starting search on AniList for query: Naruto
+[2026-07-03 17:25:11] [INFO] [bot] [anilist.py:74]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:11] [INFO] [bot] [anilist.py:86]: Scraping page: https://graphql.anilist.co (Direct Media Query)
+[2026-07-03 17:25:12] [INFO] [bot] [anilist.py:123]: AniList search returned 5 normalized titles.
+[2026-07-03 17:25:12] [INFO] [bot] [test_services.py:108]: [SUCCESS] AniList resolved: Naruto (ID: 20)
+[2026-07-03 17:25:12] [INFO] [bot] [test_services.py:111]: --- 3. Testing AniNeko Search Scraper ---
+[2026-07-03 17:25:12] [INFO] [bot] [scraper.py:122]: Starting search for anime: Naruto
+[2026-07-03 17:25:12] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/browser?keyword=Naruto via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:12] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:13] [INFO] [bot] [scraper.py:160]: Found 26 search results on AniNeko.
+[2026-07-03 17:25:13] [INFO] [bot] [test_services.py:117]: [SUCCESS] AniNeko matched slug: 'naruto-the-movie-2-legend-of-the-stone-of-gelel' | Title: 'Naruto the Movie 2: Legend of the Stone of Gelel'
+[2026-07-03 17:25:13] [INFO] [bot] [test_services.py:120]: --- 4. Testing AniNeko Episode Scraper ---
+[2026-07-03 17:25:13] [INFO] [bot] [scraper.py:170]: Fetching episodes list for anime slug: naruto-the-movie-2-legend-of-the-stone-of-gelel
+[2026-07-03 17:25:13] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:13] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:14] [INFO] [bot] [scraper.py:215]: Parsed 1 episodes for anime slug: naruto-the-movie-2-legend-of-the-stone-of-gelel
+[2026-07-03 17:25:14] [INFO] [bot] [test_services.py:125]: [SUCCESS] AniNeko parsed 1 episodes.
+[2026-07-03 17:25:14] [INFO] [bot] [test_services.py:127]: First Episode details: {'ep_number': '1', 'play_url': 'https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1'}
+[2026-07-03 17:25:14] [INFO] [bot] [test_services.py:130]: --- 5. Testing Download Links Scraper ---
+[2026-07-03 17:25:14] [INFO] [bot] [scraper.py:226]: Scraping download links from watch page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1
+[2026-07-03 17:25:14] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:14] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:15] [INFO] [bot] [scraper.py:39]: Scraping page: https://vivibebe.site/e468d3e4c2008509 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:15] [INFO] [bot] [scraper.py:42]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:16] [INFO] [bot] [scraper.py:60]: Resolved master .m3u8 playlist: https://vivibebe.site/public/stream/e468d3e4c2008509/master.m3u8
+[2026-07-03 17:25:16] [INFO] [bot] [scraper.py:70]: Scraping page: https://vivibebe.site/public/stream/e468d3e4c2008509/master.m3u8 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:16] [INFO] [bot] [scraper.py:73]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:16] [INFO] [bot] [scraper.py:112]: Parsed qualities from master playlist: ['360p', '720p', '1080p']
+[2026-07-03 17:25:16] [INFO] [bot] [scraper.py:39]: Scraping page: https://vivibebe.site/2267f3273e858575 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:16] [INFO] [bot] [scraper.py:42]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:17] [INFO] [bot] [scraper.py:60]: Resolved master .m3u8 playlist: https://vivibebe.site/public/stream/2267f3273e858575/master.m3u8
+[2026-07-03 17:25:17] [INFO] [bot] [scraper.py:70]: Scraping page: https://vivibebe.site/public/stream/2267f3273e858575/master.m3u8 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:17] [INFO] [bot] [scraper.py:73]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:17] [INFO] [bot] [scraper.py:112]: Parsed qualities from master playlist: ['360p', '720p', '1080p']
+[2026-07-03 17:25:17] [INFO] [bot] [scraper.py:275]: Resolved 3 download link qualities: ['360p', '720p', '1080p']
+[2026-07-03 17:25:17] [INFO] [bot] [test_services.py:135]: [SUCCESS] Resolved streaming qualities: ['360p', '720p', '1080p']
+[2026-07-03 17:25:17] [INFO] [bot] [test_services.py:138]: --- 6. Testing HLS Size Estimation & PNG Stripping ---
+[2026-07-03 17:25:17] [INFO] [bot] [downloader.py:37]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:17] [INFO] [bot] [downloader.py:43]: Estimating HLS stream size for playlist: https://vivibebe.site/public/stream/2267f3273e858575/254793360.m3u8
+[2026-07-03 17:25:20] [ERROR] [bot] [downloader.py:78]: Error in process while estimating HLS playlist size
+Traceback (most recent call last):
+  File "c:\Users\monsm\OneDrive\Desktop\BOT\app\services\downloader.py", line 60, in get_url_file_size
+    text = await sub_resp.text()
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client_reqrep.py", line 762, in text
+    return self._body.decode(encoding, errors=errors)  # type: ignore[union-attr]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte
+[2026-07-03 17:25:20] [INFO] [bot] [test_services.py:145]: [SUCCESS] Estimated Size for 360p: 100.00 MB
+[2026-07-03 17:25:20] [INFO] [bot] [test_services.py:32]: [TEST] Fetching HLS variant playlist for partial download: https://vivibebe.site/public/stream/2267f3273e858575/254793360.m3u8
+[2026-07-03 17:25:21] [INFO] [bot] [test_services.py:53]: [TEST] Found 580 segments. Downloading first 2 segments...
+[2026-07-03 17:25:24] [INFO] [bot] [test_services.py:63]: [TEST] Confirmed first segment is PNG wrapped.
+[2026-07-03 17:25:24] [INFO] [bot] [test_services.py:69]: [TEST] Downloading segment 1: https://p16-ad-sg.ibyteimg.com/obj/ad-site-i18n/202603265d0d3b06cea8fcbf4a34aa3d
+[2026-07-03 17:25:24] [INFO] [bot] [test_services.py:76]: [TEST] Segment 1 appended. Size: 673604 bytes
+[2026-07-03 17:25:24] [INFO] [bot] [test_services.py:69]: [TEST] Downloading segment 2: https://p16-ad-sg.ibyteimg.com/obj/ad-site-i18n/202603265d0df7a27f62b8894232b2ea
+[2026-07-03 17:25:24] [INFO] [bot] [test_services.py:76]: [TEST] Segment 2 appended. Size: 234248 bytes
+[2026-07-03 17:25:24] [INFO] [bot] [test_services.py:82]: [TEST] Combined file header (hex): 474000100000b00d0001
+[2026-07-03 17:25:24] [INFO] [bot] [test_services.py:84]: [TEST] SUCCESS: Output file has valid MPEG-TS sync byte (0x47)!
+[2026-07-03 17:25:24] [INFO] [bot] [test_services.py:151]: [SUCCESS] AniNeko Scraper & HLS Wrapper validation PASSED!
+[2026-07-03 17:25:24] [INFO] [bot] [test_services.py:162]: === VERIFICATION COMPLETED ===
+[2026-07-03 17:25:54] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-03 17:25:56] [INFO] [bot] [test_services.py:94]: === STARTING LIVE ANI-NEKO MIGRATION VERIFICATION ===
+[2026-07-03 17:25:56] [INFO] [bot] [test_services.py:97]: --- 1. Testing Database Init ---
+[2026-07-03 17:25:56] [INFO] [bot] [test_services.py:101]: --- 2. Testing AniList GraphQL ---
+[2026-07-03 17:25:56] [INFO] [bot] [anilist.py:69]: Starting search on AniList for query: Naruto
+[2026-07-03 17:25:56] [INFO] [bot] [anilist.py:74]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:56] [INFO] [bot] [anilist.py:86]: Scraping page: https://graphql.anilist.co (Direct Media Query)
+[2026-07-03 17:25:57] [INFO] [bot] [anilist.py:123]: AniList search returned 5 normalized titles.
+[2026-07-03 17:25:57] [INFO] [bot] [test_services.py:108]: [SUCCESS] AniList resolved: Naruto (ID: 20)
+[2026-07-03 17:25:57] [INFO] [bot] [test_services.py:111]: --- 3. Testing AniNeko Search Scraper ---
+[2026-07-03 17:25:57] [INFO] [bot] [scraper.py:122]: Starting search for anime: Naruto
+[2026-07-03 17:25:57] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/browser?keyword=Naruto via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:57] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:58] [INFO] [bot] [scraper.py:160]: Found 26 search results on AniNeko.
+[2026-07-03 17:25:58] [INFO] [bot] [test_services.py:117]: [SUCCESS] AniNeko matched slug: 'naruto-the-movie-2-legend-of-the-stone-of-gelel' | Title: 'Naruto the Movie 2: Legend of the Stone of Gelel'
+[2026-07-03 17:25:58] [INFO] [bot] [test_services.py:120]: --- 4. Testing AniNeko Episode Scraper ---
+[2026-07-03 17:25:58] [INFO] [bot] [scraper.py:170]: Fetching episodes list for anime slug: naruto-the-movie-2-legend-of-the-stone-of-gelel
+[2026-07-03 17:25:58] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:25:58] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:00] [INFO] [bot] [scraper.py:215]: Parsed 1 episodes for anime slug: naruto-the-movie-2-legend-of-the-stone-of-gelel
+[2026-07-03 17:26:00] [INFO] [bot] [test_services.py:125]: [SUCCESS] AniNeko parsed 1 episodes.
+[2026-07-03 17:26:00] [INFO] [bot] [test_services.py:127]: First Episode details: {'ep_number': '1', 'play_url': 'https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1'}
+[2026-07-03 17:26:00] [INFO] [bot] [test_services.py:130]: --- 5. Testing Download Links Scraper ---
+[2026-07-03 17:26:00] [INFO] [bot] [scraper.py:226]: Scraping download links from watch page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1
+[2026-07-03 17:26:00] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:00] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:01] [INFO] [bot] [scraper.py:39]: Scraping page: https://vivibebe.site/e468d3e4c2008509 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:01] [INFO] [bot] [scraper.py:42]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:02] [INFO] [bot] [scraper.py:60]: Resolved master .m3u8 playlist: https://vivibebe.site/public/stream/e468d3e4c2008509/master.m3u8
+[2026-07-03 17:26:02] [INFO] [bot] [scraper.py:70]: Scraping page: https://vivibebe.site/public/stream/e468d3e4c2008509/master.m3u8 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:02] [INFO] [bot] [scraper.py:73]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:03] [INFO] [bot] [scraper.py:112]: Parsed qualities from master playlist: ['360p', '720p', '1080p']
+[2026-07-03 17:26:03] [INFO] [bot] [scraper.py:39]: Scraping page: https://vivibebe.site/2267f3273e858575 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:03] [INFO] [bot] [scraper.py:42]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:03] [INFO] [bot] [scraper.py:60]: Resolved master .m3u8 playlist: https://vivibebe.site/public/stream/2267f3273e858575/master.m3u8
+[2026-07-03 17:26:03] [INFO] [bot] [scraper.py:70]: Scraping page: https://vivibebe.site/public/stream/2267f3273e858575/master.m3u8 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:03] [INFO] [bot] [scraper.py:73]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:03] [INFO] [bot] [scraper.py:112]: Parsed qualities from master playlist: ['360p', '720p', '1080p']
+[2026-07-03 17:26:03] [INFO] [bot] [scraper.py:275]: Resolved 3 download link qualities: ['360p', '720p', '1080p']
+[2026-07-03 17:26:03] [INFO] [bot] [test_services.py:135]: [SUCCESS] Resolved streaming qualities: ['360p', '720p', '1080p']
+[2026-07-03 17:26:03] [INFO] [bot] [test_services.py:138]: --- 6. Testing HLS Size Estimation & PNG Stripping ---
+[2026-07-03 17:26:03] [INFO] [bot] [downloader.py:37]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:26:03] [INFO] [bot] [downloader.py:43]: Estimating HLS stream size for playlist: https://vivibebe.site/public/stream/2267f3273e858575/254793360.m3u8
+[2026-07-03 17:26:10] [ERROR] [bot] [downloader.py:84]: Error in process while estimating HLS playlist size
+Traceback (most recent call last):
+  File "c:\Users\monsm\OneDrive\Desktop\BOT\app\services\downloader.py", line 66, in get_url_file_size
+    text = sub_data.decode("utf-8")
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb0 in position 6: invalid start byte
+[2026-07-03 17:26:10] [INFO] [bot] [test_services.py:145]: [SUCCESS] Estimated Size for 360p: 100.00 MB
+[2026-07-03 17:26:10] [INFO] [bot] [test_services.py:32]: [TEST] Fetching HLS variant playlist for partial download: https://vivibebe.site/public/stream/2267f3273e858575/254793360.m3u8
+[2026-07-03 17:26:11] [INFO] [bot] [test_services.py:53]: [TEST] Found 580 segments. Downloading first 2 segments...
+[2026-07-03 17:26:13] [INFO] [bot] [test_services.py:63]: [TEST] Confirmed first segment is PNG wrapped.
+[2026-07-03 17:26:13] [INFO] [bot] [test_services.py:69]: [TEST] Downloading segment 1: https://p16-ad-sg.ibyteimg.com/obj/ad-site-i18n/202603265d0d3b06cea8fcbf4a34aa3d
+[2026-07-03 17:26:13] [INFO] [bot] [test_services.py:76]: [TEST] Segment 1 appended. Size: 673604 bytes
+[2026-07-03 17:26:13] [INFO] [bot] [test_services.py:69]: [TEST] Downloading segment 2: https://p16-ad-sg.ibyteimg.com/obj/ad-site-i18n/202603265d0df7a27f62b8894232b2ea
+[2026-07-03 17:26:14] [INFO] [bot] [test_services.py:76]: [TEST] Segment 2 appended. Size: 234248 bytes
+[2026-07-03 17:26:14] [INFO] [bot] [test_services.py:82]: [TEST] Combined file header (hex): 474000100000b00d0001
+[2026-07-03 17:26:14] [INFO] [bot] [test_services.py:84]: [TEST] SUCCESS: Output file has valid MPEG-TS sync byte (0x47)!
+[2026-07-03 17:26:14] [INFO] [bot] [test_services.py:151]: [SUCCESS] AniNeko Scraper & HLS Wrapper validation PASSED!
+[2026-07-03 17:26:14] [INFO] [bot] [test_services.py:162]: === VERIFICATION COMPLETED ===
+[2026-07-03 17:26:45] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-03 17:27:05] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-03 17:27:07] [INFO] [bot] [test_services.py:94]: === STARTING LIVE ANI-NEKO MIGRATION VERIFICATION ===
+[2026-07-03 17:27:07] [INFO] [bot] [test_services.py:97]: --- 1. Testing Database Init ---
+[2026-07-03 17:27:07] [INFO] [bot] [test_services.py:101]: --- 2. Testing AniList GraphQL ---
+[2026-07-03 17:27:07] [INFO] [bot] [anilist.py:69]: Starting search on AniList for query: Naruto
+[2026-07-03 17:27:07] [INFO] [bot] [anilist.py:74]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:07] [INFO] [bot] [anilist.py:86]: Scraping page: https://graphql.anilist.co (Direct Media Query)
+[2026-07-03 17:27:09] [INFO] [bot] [anilist.py:123]: AniList search returned 5 normalized titles.
+[2026-07-03 17:27:09] [INFO] [bot] [test_services.py:108]: [SUCCESS] AniList resolved: Naruto (ID: 20)
+[2026-07-03 17:27:09] [INFO] [bot] [test_services.py:111]: --- 3. Testing AniNeko Search Scraper ---
+[2026-07-03 17:27:09] [INFO] [bot] [scraper.py:122]: Starting search for anime: Naruto
+[2026-07-03 17:27:09] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/browser?keyword=Naruto via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:09] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:10] [INFO] [bot] [scraper.py:160]: Found 26 search results on AniNeko.
+[2026-07-03 17:27:10] [INFO] [bot] [test_services.py:117]: [SUCCESS] AniNeko matched slug: 'naruto-the-movie-2-legend-of-the-stone-of-gelel' | Title: 'Naruto the Movie 2: Legend of the Stone of Gelel'
+[2026-07-03 17:27:10] [INFO] [bot] [test_services.py:120]: --- 4. Testing AniNeko Episode Scraper ---
+[2026-07-03 17:27:10] [INFO] [bot] [scraper.py:170]: Fetching episodes list for anime slug: naruto-the-movie-2-legend-of-the-stone-of-gelel
+[2026-07-03 17:27:10] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:10] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:11] [INFO] [bot] [scraper.py:215]: Parsed 1 episodes for anime slug: naruto-the-movie-2-legend-of-the-stone-of-gelel
+[2026-07-03 17:27:11] [INFO] [bot] [test_services.py:125]: [SUCCESS] AniNeko parsed 1 episodes.
+[2026-07-03 17:27:11] [INFO] [bot] [test_services.py:127]: First Episode details: {'ep_number': '1', 'play_url': 'https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1'}
+[2026-07-03 17:27:11] [INFO] [bot] [test_services.py:130]: --- 5. Testing Download Links Scraper ---
+[2026-07-03 17:27:11] [INFO] [bot] [scraper.py:226]: Scraping download links from watch page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1
+[2026-07-03 17:27:11] [INFO] [bot] [scraper.py:18]: Scraping page: https://anineko.to/watch/naruto-the-movie-2-legend-of-the-stone-of-gelel/ep-1 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:11] [INFO] [bot] [scraper.py:22]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:12] [INFO] [bot] [scraper.py:39]: Scraping page: https://vivibebe.site/e468d3e4c2008509 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:12] [INFO] [bot] [scraper.py:42]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:13] [INFO] [bot] [scraper.py:60]: Resolved master .m3u8 playlist: https://vivibebe.site/public/stream/e468d3e4c2008509/master.m3u8
+[2026-07-03 17:27:13] [INFO] [bot] [scraper.py:70]: Scraping page: https://vivibebe.site/public/stream/e468d3e4c2008509/master.m3u8 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:13] [INFO] [bot] [scraper.py:73]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:14] [INFO] [bot] [scraper.py:112]: Parsed qualities from master playlist: ['360p', '720p', '1080p']
+[2026-07-03 17:27:14] [INFO] [bot] [scraper.py:39]: Scraping page: https://vivibebe.site/2267f3273e858575 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:14] [INFO] [bot] [scraper.py:42]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:14] [INFO] [bot] [scraper.py:60]: Resolved master .m3u8 playlist: https://vivibebe.site/public/stream/2267f3273e858575/master.m3u8
+[2026-07-03 17:27:14] [INFO] [bot] [scraper.py:70]: Scraping page: https://vivibebe.site/public/stream/2267f3273e858575/master.m3u8 via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:14] [INFO] [bot] [scraper.py:73]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:14] [INFO] [bot] [scraper.py:112]: Parsed qualities from master playlist: ['360p', '720p', '1080p']
+[2026-07-03 17:27:14] [INFO] [bot] [scraper.py:275]: Resolved 3 download link qualities: ['360p', '720p', '1080p']
+[2026-07-03 17:27:14] [INFO] [bot] [test_services.py:135]: [SUCCESS] Resolved streaming qualities: ['360p', '720p', '1080p']
+[2026-07-03 17:27:14] [INFO] [bot] [test_services.py:138]: --- 6. Testing HLS Size Estimation & PNG Stripping ---
+[2026-07-03 17:27:14] [INFO] [bot] [downloader.py:37]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-03 17:27:14] [INFO] [bot] [downloader.py:43]: Estimating HLS stream size for playlist: https://vivibebe.site/public/stream/2267f3273e858575/254793360.m3u8
+[2026-07-03 17:27:18] [INFO] [bot] [downloader.py:82]: HLS size estimation: 580 segments * 673604 bytes = 372.59 MB
+[2026-07-03 17:27:18] [INFO] [bot] [test_services.py:145]: [SUCCESS] Estimated Size for 360p: 372.59 MB
+[2026-07-03 17:27:18] [INFO] [bot] [test_services.py:32]: [TEST] Fetching HLS variant playlist for partial download: https://vivibebe.site/public/stream/2267f3273e858575/254793360.m3u8
+[2026-07-03 17:27:20] [INFO] [bot] [test_services.py:53]: [TEST] Found 580 segments. Downloading first 2 segments...
+[2026-07-03 17:27:23] [INFO] [bot] [test_services.py:63]: [TEST] Confirmed first segment is PNG wrapped.
+[2026-07-03 17:27:23] [INFO] [bot] [test_services.py:69]: [TEST] Downloading segment 1: https://p16-ad-sg.ibyteimg.com/obj/ad-site-i18n/202603265d0d3b06cea8fcbf4a34aa3d
+[2026-07-03 17:27:23] [INFO] [bot] [test_services.py:76]: [TEST] Segment 1 appended. Size: 673604 bytes
+[2026-07-03 17:27:23] [INFO] [bot] [test_services.py:69]: [TEST] Downloading segment 2: https://p16-ad-sg.ibyteimg.com/obj/ad-site-i18n/202603265d0df7a27f62b8894232b2ea
+[2026-07-03 17:27:23] [INFO] [bot] [test_services.py:76]: [TEST] Segment 2 appended. Size: 234248 bytes
+[2026-07-03 17:27:23] [INFO] [bot] [test_services.py:82]: [TEST] Combined file header (hex): 474000100000b00d0001
+[2026-07-03 17:27:23] [INFO] [bot] [test_services.py:84]: [TEST] SUCCESS: Output file has valid MPEG-TS sync byte (0x47)!
+[2026-07-03 17:27:23] [INFO] [bot] [test_services.py:151]: [SUCCESS] AniNeko Scraper & HLS Wrapper validation PASSED!
+[2026-07-03 17:27:23] [INFO] [bot] [test_services.py:162]: === VERIFICATION COMPLETED ===

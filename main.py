@@ -11,27 +11,29 @@ from config import config
 from app.database.connection import init_db
 from app.middlewares.db_session import DbSessionMiddleware
 from app.handlers import start, search, download
+from app.utils.logging_config import logger
 
 async def main():
     # 1. Validate environment variables configuration
     try:
         config.validate()
     except ValueError as e:
-        print(f"Configuration Error: {e}", file=sys.stderr)
+        logger.error(f"Configuration Error: {e}")
         sys.exit(1)
 
     # 2. Boot and migrate Database schema
+    logger.info("Initializing database schema...")
     await init_db()
 
     # 3. Setup Custom Bot Session (Local Bot API server support for files up to 2GB)
     session = None
     if config.TELEGRAM_API_SERVER:
         try:
-            print(f"Connecting using custom local Bot API server: {config.TELEGRAM_API_SERVER}")
+            logger.info(f"Connecting using custom local Bot API server: {config.TELEGRAM_API_SERVER}")
             api_server = TelegramAPIServer.from_base(config.TELEGRAM_API_SERVER)
             session = AiohttpSession(api=api_server)
-        except Exception as e:
-            print(f"Error creating custom Bot API session: {e}. Falling back to default.")
+        except Exception:
+            logger.exception("Error creating custom Bot API session. Falling back to default.")
             session = None
 
     # 4. Initialize Bot and Dispatcher instances
@@ -54,11 +56,14 @@ async def main():
     dp.include_router(download.router)
 
     # 7. Start polling
-    print("Bot polling started. Press Ctrl+C to exit.")
+    logger.info("Bot polling started.")
     try:
         await dp.start_polling(bot)
+    except Exception:
+        logger.exception("Fatal error in bot polling loop")
     finally:
         await bot.session.close()
+        logger.info("Bot session closed.")
 
 if __name__ == "__main__":
     # Handle Windows SelectorEventLoop policy issues with Asyncio
@@ -67,4 +72,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        print("Bot stopped.")
+        logger.info("Bot stopped by user interrupt.")

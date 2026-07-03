@@ -4,12 +4,13 @@ import aiohttp
 import asyncio
 from pathlib import Path
 from typing import Dict, Tuple, Optional
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urljoin
 from aiogram import Bot
 from aiogram.types import FSInputFile, Message
 from config import config
 from app.utils.user_agents import get_random_user_agent
 from app.services.anilist import get_connector
+from app.utils.logging_config import logger
 
 MAX_TELEGRAM_STANDARD_SIZE = 50 * 1024 * 1024       # 50 MB
 MAX_TELEGRAM_LOCAL_SIZE = 2 * 1024 * 1024 * 1024     # 2 GB
@@ -23,7 +24,7 @@ def make_progress_bar(percentage: float, length: int = 10) -> str:
 async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
     """
     Validates a stream URL by requesting its headers and retrieving the file size.
-    Performs a HEAD request, falling back to a GET request if HEAD is rejected.
+    For HLS playlists (.m3u8), estimates the total size by analyzing variant playlists and segment sizes.
     """
     # Parse mock override parameters if they exist
     parsed = urlparse(url)
@@ -31,6 +32,61 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
     if "mock_size" in query_params:
         return int(query_params["mock_size"][0])
 
+    # Log proxy if used
+    if config.PROXY_URL:
+        logger.info(f"Proxy used for request: {config.PROXY_URL}")
+
+    # Estimate HLS stream size
+    if ".m3u8" in url or "master" in url or "stream" in url:
+        headers = {"User-Agent": get_random_user_agent(), "Referer": "https://vivibebe.site/"}
+        try:
+            logger.info(f"Estimating HLS stream size for playlist: {url}")
+            async with session.get(url, headers=headers, timeout=10) as resp:
+                if resp.status == 200:
+                    data = await resp.read()
+                    if data.startswith(b"\x89PNG"):
+                        data = data[252:]
+                    text = data.decode("utf-8")
+                    lines = text.splitlines()
+                    
+                    playlist_url = url
+                    if "#EXT-X-STREAM-INF:" in text:
+                        for line in lines:
+                            line = line.strip()
+                            if line and not line.startswith("#"):
+                                playlist_url = urljoin(url, line)
+                                break
+                                
+                        if playlist_url != url:
+                            # Fetch variant playlist to get accurate count
+                            async with session.get(playlist_url, headers=headers, timeout=10) as sub_resp:
+                                if sub_resp.status == 200:
+                                    sub_data = await sub_resp.read()
+                                    if sub_data.startswith(b"\x89PNG"):
+                                        sub_data = sub_data[252:]
+                                    text = sub_data.decode("utf-8")
+                                    lines = text.splitlines()
+                                
+                    segment_urls = [urljoin(playlist_url, l.strip()) for l in lines if l.strip() and not l.startswith("#")]
+                    if segment_urls:
+                        first_seg_url = segment_urls[0]
+                        async with session.get(first_seg_url, headers=headers, timeout=10) as seg_resp:
+                            if seg_resp.status == 200:
+                                length = seg_resp.headers.get("Content-Length")
+                                if length:
+                                    # Test if png wrapped (subtract 252)
+                                    seg_data = await seg_resp.read()
+                                    is_png = seg_data.startswith(b"\x89PNG")
+                                    actual_size = int(length) - 252 if is_png else int(length)
+                                    total_est = len(segment_urls) * actual_size
+                                    logger.info(f"HLS size estimation: {len(segment_urls)} segments * {actual_size} bytes = {total_est / (1024*1024):.2f} MB")
+                                    return total_est
+        except Exception:
+            logger.exception("Error in process while estimating HLS playlist size")
+        # Fallback default (100MB)
+        return 100 * 1024 * 1024
+
+    # Otherwise standard content-length head request
     headers = {"User-Agent": get_random_user_agent()}
     try:
         # Try HEAD request
@@ -40,13 +96,13 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
                 if length:
                     return int(length)
                     
-        # Fallback to GET request if HEAD failed to retrieve Content-Length
+        # Fallback to GET request if HEAD failed
         async with session.get(url, headers=headers, allow_redirects=True, timeout=10) as response:
             length = response.headers.get("Content-Length")
             if length:
                 return int(length)
-    except Exception as e:
-        print(f"HEAD size check failed for {url}: {e}")
+    except Exception:
+        logger.exception(f"Error in process while fetching file size from {url}")
         
     return 0
 
@@ -62,7 +118,7 @@ async def select_best_quality(qualities: Dict[str, str], requested_quality: str 
     # Filter available qualities matching our order
     available_qualities = [q for q in quality_order if q in qualities]
     
-    # If the user requested a specific quality, prioritize it by moving it to the top
+    # If the user requested a specific quality, prioritize it
     if requested_quality != "auto" and requested_quality in qualities:
         available_qualities = [requested_quality] + [q for q in available_qualities if q != requested_quality]
 
@@ -71,7 +127,7 @@ async def select_best_quality(qualities: Dict[str, str], requested_quality: str 
         for q in available_qualities:
             url = qualities[q]
             size = await get_url_file_size(url, session)
-            print(f"Checking quality {q}: Size is {size / (1024*1024):.2f} MB")
+            logger.info(f"Checking quality {q}: Size is {size / (1024*1024):.2f} MB")
             
             # If the size is within the Telegram absolute limit (2GB)
             if size <= MAX_TELEGRAM_LOCAL_SIZE:
@@ -83,6 +139,128 @@ async def select_best_quality(qualities: Dict[str, str], requested_quality: str 
         size = await get_url_file_size(url, session)
         return lowest_q, url, size
 
+async def download_hls(
+    m3u8_url: str,
+    target_path: Path,
+    status_message: Message,
+    quality: str
+) -> bool:
+    """
+    Downloads an HLS stream (.m3u8) segment by segment, strips any fake PNG headers (252 bytes),
+    concatenates the TS files, and updates progress in Telegram.
+    """
+    connector = get_connector()
+    headers = {"User-Agent": get_random_user_agent(), "Referer": "https://vivibebe.site/"}
+    
+    if config.PROXY_URL:
+        logger.info(f"Proxy used for request: {config.PROXY_URL}")
+        
+    try:
+        async with aiohttp.ClientSession(connector=connector) as session:
+            logger.info(f"Fetching HLS variant playlist: {m3u8_url}")
+            async with session.get(m3u8_url, headers=headers, timeout=15) as resp:
+                if resp.status != 200:
+                    logger.error(f"Error in process: failed to fetch variant playlist {m3u8_url}, status {resp.status}")
+                    return False
+                text = await resp.text()
+                
+            lines = text.splitlines()
+            segment_urls = []
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    segment_urls.append(urljoin(m3u8_url, line))
+                    
+            if not segment_urls:
+                logger.error("Error in process: HLS playlist contained no segment URLs.")
+                return False
+                
+            logger.info(f"Found {len(segment_urls)} HLS segments to download.")
+            
+            # Check first segment to see if it is wrapped in PNG
+            first_seg_url = segment_urls[0]
+            first_seg_size = 500000  # Default 500KB fallback
+            is_png_wrapped = False
+            
+            try:
+                async with session.get(first_seg_url, headers=headers, timeout=10) as get_resp:
+                    if get_resp.status == 200:
+                        size_header = get_resp.headers.get("Content-Length")
+                        if size_header:
+                            first_seg_size = int(size_header)
+                        head_data = await get_resp.read()
+                        if head_data.startswith(b"\x89PNG"):
+                            is_png_wrapped = True
+                            logger.info("Detected PNG signature wrapper in stream segments. Stripping active (offset 252).")
+            except Exception:
+                logger.exception("Error in process while checking first HLS segment headers")
+                
+            actual_seg_size = first_seg_size - 252 if is_png_wrapped else first_seg_size
+            estimated_total_size = len(segment_urls) * actual_seg_size
+            
+            downloaded_bytes = 0
+            start_time = time.time()
+            last_update = 0
+            
+            logger.info(f"Starting HLS segment download loop for {len(segment_urls)} segments.")
+            with open(target_path, "wb") as outfile:
+                for idx, seg_url in enumerate(segment_urls):
+                    success = False
+                    for attempt in range(3):
+                        try:
+                            async with session.get(seg_url, headers=headers, timeout=30) as seg_resp:
+                                if seg_resp.status == 200:
+                                    seg_data = await seg_resp.read()
+                                    
+                                    # Strip fake PNG signature
+                                    if is_png_wrapped and seg_data.startswith(b"\x89PNG"):
+                                        seg_data = seg_data[252:]
+                                        
+                                    outfile.write(seg_data)
+                                    downloaded_bytes += len(seg_data)
+                                    success = True
+                                    break
+                                else:
+                                    logger.warning(f"Segment {idx+1} download status: {seg_resp.status} (attempt {attempt+1})")
+                        except Exception as se:
+                            logger.warning(f"Error downloading segment {idx+1} (attempt {attempt+1}): {se}")
+                            await asyncio.sleep(1)
+                            
+                    if not success:
+                        logger.error(f"Error in process: failed to download segment {idx+1} after 3 attempts.")
+                        return False
+                        
+                    # Update progress bar
+                    now = time.time()
+                    if now - last_update > 3.0 or idx == len(segment_urls) - 1:
+                        elapsed = now - start_time
+                        speed = downloaded_bytes / elapsed if elapsed > 0 else 0
+                        percentage = ((idx + 1) / len(segment_urls)) * 100
+                        
+                        bar = make_progress_bar(percentage)
+                        speed_mb = speed / (1024 * 1024)
+                        dl_mb = downloaded_bytes / (1024 * 1024)
+                        total_mb = estimated_total_size / (1024 * 1024)
+                        
+                        progress_text = (
+                            f"📥 **Downloading HLS stream...**\n"
+                            f"Quality: `{quality}`\n"
+                            f"Progress: `{percentage:.1f}%` `{bar}` (Segment {idx+1}/{len(segment_urls)})\n"
+                            f"Downloaded: `{dl_mb:.1f} MB` / `{total_mb:.1f} MB` (estimated)\n"
+                            f"Speed: `{speed_mb:.2f} MB/s`"
+                        )
+                        logger.info(f"Download progress: {percentage:.1f}% - {dl_mb:.1f}/{total_mb:.1f} MB - Speed: {speed_mb:.2f} MB/s")
+                        
+                        try:
+                            await status_message.edit_text(progress_text, parse_mode="Markdown")
+                        except Exception:
+                            pass
+                        last_update = now
+            return True
+    except Exception:
+        logger.exception("Error in process during HLS download")
+        return False
+
 async def download_file(
     url: str,
     target_path: Path,
@@ -91,11 +269,16 @@ async def download_file(
     quality: str
 ) -> bool:
     """
-    Downloads a file in chunks and updates progress inside a Telegram message.
+    Downloads a file (direct link or HLS stream) and updates progress.
     """
+    if ".m3u8" in url or "master" in url or "stream" in url:
+        return await download_hls(url, target_path, status_message, quality)
+
     connector = get_connector()
     headers = {"User-Agent": get_random_user_agent()}
-    
+    if config.PROXY_URL:
+        logger.info(f"Proxy used for request: {config.PROXY_URL}")
+        
     chunk_size = 1024 * 1024  # 1 MB chunk
     downloaded = 0
     start_time = time.time()
@@ -105,6 +288,7 @@ async def download_file(
         async with aiohttp.ClientSession(connector=connector) as session:
             async with session.get(url, headers=headers, timeout=120) as response:
                 if response.status != 200:
+                    logger.error(f"Error in process: standard download returned status {response.status}")
                     return False
                     
                 with open(target_path, "wb") as f:
@@ -112,7 +296,6 @@ async def download_file(
                         f.write(chunk)
                         downloaded += len(chunk)
                         
-                        # Throttle updates to Telegram to avoid rate limit (once every 3 seconds)
                         now = time.time()
                         if now - last_update > 3.0:
                             elapsed = now - start_time
@@ -131,15 +314,16 @@ async def download_file(
                                 f"Downloaded: `{dl_mb:.1f} MB` / `{total_mb:.1f} MB`\n"
                                 f"Speed: `{speed_mb:.2f} MB/s`"
                             )
+                            logger.info(f"Download progress: {percentage:.1f}% - {dl_mb:.1f}/{total_mb:.1f} MB - Speed: {speed_mb:.2f} MB/s")
                             try:
                                 await status_message.edit_text(progress_text, parse_mode="Markdown")
                             except Exception:
-                                pass  # Ignore minor telegram errors
+                                pass
                             last_update = now
                             
         return True
-    except Exception as e:
-        print(f"Error during file download: {e}")
+    except Exception:
+        logger.exception(f"Error in process during direct file download from {url}")
         return False
 
 async def process_and_send_video(
@@ -158,6 +342,7 @@ async def process_and_send_video(
     try:
         quality, download_url, size = await select_best_quality(qualities, requested_quality)
     except Exception as e:
+        logger.exception("Error in process while selecting best quality")
         await status_msg.edit_text(f"❌ Failed to resolve links: {e}")
         return
 
@@ -216,6 +401,7 @@ async def process_and_send_video(
         await status_msg.delete()
         
     except Exception as e:
+        logger.exception("Error in process while downloading/uploading video")
         await status_msg.edit_text(
             f"❌ Upload failed: {e}\n\n"
             f"Here is your direct link instead:\n"

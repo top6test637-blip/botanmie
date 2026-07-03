@@ -10,6 +10,7 @@ from app.handlers.search import SearchStates
 from app.database.models import EpisodeCache, DownloadCache
 from app.services.scraper import search_anime_scraper, get_episodes_scraper, get_download_links_scraper
 from app.services.downloader import process_and_send_video
+from app.utils.logging_config import logger
 
 router = Router(name="download")
 
@@ -32,9 +33,12 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
     title_english = state_data.get("title_english")
     
     if not anilist_id:
+        logger.error("Error in process: FSM state context lost during episode selection.")
         await message.answer("❌ Error: Lost state context. Please search for your anime again.")
         await state.clear()
         return
+
+    logger.info(f"Starting episode resolution for '{anime_title}' (AniList ID: {anilist_id}, Episode: {requested_ep})")
 
     # Status notification
     status_msg = await message.answer("🔍 Checking episode list...")
@@ -49,32 +53,37 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
         
         # If cached and not expired
         if cached_episodes and (datetime.now(timezone.utc) - cached_episodes[0].created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
+            logger.info(f"Episode list cache hit for AniList ID: {anilist_id}")
             episodes_list = [
                 {"ep_number": ep.ep_number, "play_url": ep.play_url}
                 for ep in cached_episodes
             ]
         else:
-            # Need to scrape from Gogoanime
+            logger.info(f"Episode list cache miss or expired for AniList ID: {anilist_id}. Scraping page...")
+            # Need to scrape from AniNeko
             # 1. Search anime on scraper to get slug
             search_title = title_romaji or title_english
             scraper_results = await search_anime_scraper(search_title)
             
             if not scraper_results:
-                # Try with English title if Romaji failed
                 if title_english and title_english != title_romaji:
+                    logger.info(f"Romaji search failed. Retrying search with English title: {title_english}")
                     scraper_results = await search_anime_scraper(title_english)
                     
             if not scraper_results:
+                logger.warning(f"Could not find anime '{search_title}' on AniNeko mirrors.")
                 await status_msg.edit_text("❌ Could not find this anime on the streaming server mirrors.")
                 await state.clear()
                 return
                 
             # Pick first/best result slug
             anime_slug = scraper_results[0]["slug"]
+            logger.info(f"Matched anime slug on AniNeko: '{anime_slug}'")
             
             # 2. Get list of episodes
             scraped_eps = await get_episodes_scraper(anime_slug)
             if not scraped_eps:
+                logger.error(f"Failed to parse episode list for slug: {anime_slug}")
                 await status_msg.edit_text("❌ Failed to parse episode list from mirror.")
                 await state.clear()
                 return
@@ -84,10 +93,12 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
             # 3. Update Cache
             # Clear old cache
             if cached_episodes:
+                logger.info(f"Deleting expired episode cache for AniList ID: {anilist_id}")
                 for old_ep in cached_episodes:
                     await db_session.delete(old_ep)
             
             # Insert new episodes
+            logger.info(f"Caching {len(episodes_list)} parsed episodes for AniList ID: {anilist_id}")
             for ep in episodes_list:
                 db_ep = EpisodeCache(
                     anilist_id=anilist_id,
@@ -99,7 +110,6 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
             
         # Match user's input with the episodes list
         matched_ep = None
-        # Normalize request string (e.g. "01" -> "1")
         norm_req = requested_ep.lstrip("0") or "0"
         
         for ep in episodes_list:
@@ -109,7 +119,7 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
                 break
                 
         if not matched_ep:
-            # Tell the user and let them try again (do not clear state)
+            logger.info(f"Episode {requested_ep} not found in the parsed list.")
             ep_numbers = [e["ep_number"] for e in episodes_list]
             if len(ep_numbers) > 10:
                 available_range = f"from `{ep_numbers[0]}` to `{ep_numbers[-1]}`"
@@ -126,6 +136,7 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
 
         # Episode matched, get download mirrors
         play_url = matched_ep["play_url"]
+        logger.info(f"Matched Episode {matched_ep['ep_number']}: Play page is {play_url}")
         
         # Check download cache
         dl_stmt = select(DownloadCache).where(DownloadCache.play_url == play_url)
@@ -136,14 +147,16 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
         db_cache_id = None
         
         if cached_dl and (datetime.now(timezone.utc) - cached_dl.created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
+            logger.info(f"Download links cache hit for play URL: {play_url}")
             qualities = cached_dl.qualities
             db_cache_id = cached_dl.id
         else:
-            # Scrape direct links
+            logger.info(f"Download links cache miss/expired for play URL: {play_url}. Scraping links...")
             await status_msg.edit_text("🔄 Resolving direct download links for the episode...")
             scraped_links = await get_download_links_scraper(play_url)
             
             if not scraped_links:
+                logger.error(f"Failed to scrape download links from play page: {play_url}")
                 await status_msg.edit_text("❌ Failed to parse download links for this episode. Try again later.")
                 await state.clear()
                 return
@@ -152,12 +165,14 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
             
             # Cache resolved download links
             if cached_dl:
+                logger.info(f"Updating expired download cache for play URL: {play_url}")
                 cached_dl.qualities = qualities
                 cached_dl.created_at = datetime.now(timezone.utc)
                 db_session.add(cached_dl)
                 await db_session.commit()
                 db_cache_id = cached_dl.id
             else:
+                logger.info(f"Creating new download cache entry for play URL: {play_url}")
                 new_dl = DownloadCache(
                     play_url=play_url,
                     qualities=qualities
@@ -171,7 +186,6 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
             [InlineKeyboardButton(text="⭐ Auto (Smart Size <= 2GB)", callback_data=f"dl:auto:{db_cache_id}")]
         ]
         
-        # Add available direct qualities
         quality_row = []
         for q in ["1080p", "720p", "480p", "360p"]:
             if q in qualities:
@@ -193,8 +207,9 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
         # Clean up conversation state
         await state.clear()
         
-    except Exception as e:
-        await status_msg.edit_text(f"❌ Error processing download: {e}")
+    except Exception:
+        logger.exception("Error in process while processing episode selection")
+        await status_msg.edit_text("❌ Error processing download. Please try again.")
         await state.clear()
 
 @router.callback_query(F.data.startswith("dl:"))
@@ -212,18 +227,19 @@ async def handle_download_callback(callback: CallbackQuery, db_session: AsyncSes
     dl_cache = res.scalar_one_or_none()
     
     if not dl_cache:
+        logger.warning(f"Download cache entry not found or expired (ID: {cache_id})")
         await callback.answer("❌ Episode download link expired. Please search again.", show_alert=True)
         return
         
     await callback.answer()
     
-    # Trigger download and native delivery service
     # Delete original menu message to avoid spamming the UI
     try:
         await callback.message.delete()
     except Exception:
         pass
         
+    logger.info(f"Quality selected: '{requested_quality}' (Download Cache ID: {cache_id}, User ID: {callback.from_user.id})")
     await process_and_send_video(
         bot=callback.bot,
         message=callback.message,
