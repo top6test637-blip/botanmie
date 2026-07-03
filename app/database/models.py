@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Text, func
+from sqlalchemy import Column, Integer, BigInteger, String, Float, DateTime, JSON, Text, func, UniqueConstraint
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -34,3 +34,18 @@ class DownloadCache(Base):
     play_url = Column(String(1000), unique=True, nullable=False, index=True)
     qualities = Column(JSON, nullable=False)  # Format: {"1080p": "url1", "720p": "url2", ...}
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class UserFavorites(Base):
+    """Stores user's favorite/saved anime series."""
+    __tablename__ = "user_favorites"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, nullable=False, index=True)
+    anilist_id = Column(Integer, nullable=False)
+    anime_title = Column(String(500), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'anilist_id', name='_user_anime_fav_uc'),
+    )
+

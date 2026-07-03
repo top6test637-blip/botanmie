@@ -6,7 +6,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKe
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import SearchCache
+from app.database.models import SearchCache, UserFavorites
 from app.services.anilist import search_anilist
 from app.services.scraper import search_anime_scraper
 
@@ -95,7 +95,7 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
         keyboard_buttons.append([
             InlineKeyboardButton(
                 text=title[:40] + "..." if len(title) > 43 else title,
-                callback_query=f"sel_anime:{anime['anilist_id']}"
+                callback_data=f"sel_anime:{anime['anilist_id']}"
             )
         ])
 
@@ -143,11 +143,66 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
         f"🔢 **Please type the Episode Number you want to get** (e.g. `1`, `12`, `24`):"
     )
     
+    markup = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⭐ Add to Favorites", callback_data=f"fav_add:{anilist_id}")]
+    ])
+    
     if cache_entry.image_url:
         await callback.message.answer_photo(
             photo=cache_entry.image_url,
             caption=details_text,
+            reply_markup=markup,
             parse_mode="Markdown"
         )
     else:
-        await callback.message.answer(details_text, parse_mode="Markdown")
+        await callback.message.answer(
+            details_text,
+            reply_markup=markup,
+            parse_mode="Markdown"
+        )
+
+@router.callback_query(F.data.startswith("fav_add:"))
+async def handle_add_favorite(callback: CallbackQuery, db_session: AsyncSession):
+    """
+    Saves the anime to UserFavorites table in the database and provides confirmation.
+    """
+    anilist_id = int(callback.data.split(":")[1])
+    user_id = callback.from_user.id
+
+    # Retrieve title from search cache
+    stmt = select(SearchCache).where(SearchCache.anilist_id == anilist_id)
+    res = await db_session.execute(stmt)
+    cache_entry = res.scalars().first()
+
+    if not cache_entry:
+        await callback.answer("❌ Anime details not found in cache. Search again.", show_alert=True)
+        return
+
+    title = cache_entry.title_english or cache_entry.title_romaji
+
+    # Check if already in favorites
+    fav_stmt = select(UserFavorites).where(
+        (UserFavorites.user_id == user_id) & (UserFavorites.anilist_id == anilist_id)
+    )
+    fav_res = await db_session.execute(fav_stmt)
+    existing_fav = fav_res.scalar_one_or_none()
+
+    if existing_fav:
+        await callback.answer(f"⭐ '{title}' is already in your favorites!", show_alert=False)
+        return
+
+    # Add to favorites
+    try:
+        new_fav = UserFavorites(
+            user_id=user_id,
+            anilist_id=anilist_id,
+            anime_title=title
+        )
+        db_session.add(new_fav)
+        await db_session.commit()
+        
+        # Display confirmation toast (brief message at the top of screen)
+        await callback.answer(f"✅ Added '{title}' to Favorites!", show_alert=False)
+    except Exception as e:
+        await db_session.rollback()
+        await callback.answer(f"❌ Failed to save: {e}", show_alert=True)
