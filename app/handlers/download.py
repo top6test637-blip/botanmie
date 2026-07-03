@@ -33,15 +33,14 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
     title_english = state_data.get("title_english")
     
     if not anilist_id:
-        logger.error("Error in process: FSM state context lost during episode selection.")
-        await message.answer("❌ Error: Lost state context. Please search for your anime again.")
+        logger.error("خطأ: تم فقدان سياق الحالة FSM أثناء اختيار الحلقة.")
+        await message.answer("❌ خطأ: تم فقدان سياق البحث. يرجى البحث عن الأنمي مجدداً.")
         await state.clear()
         return
 
-    logger.info(f"Starting episode resolution for '{anime_title}' (AniList ID: {anilist_id}, Episode: {requested_ep})")
+    logger.info(f"بدء تحليل الحلقة للأنمي '{anime_title}' (معرف أنيليست: {anilist_id}، الحلقة: {requested_ep})")
 
-    # Status notification
-    status_msg = await message.answer("🔍 Checking episode list...")
+    status_msg = await message.answer("🔍 جاري التحقق من الحلقات...")
     
     try:
         # Check database EpisodeCache first
@@ -51,54 +50,55 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
         
         episodes_list = []
         
-        # If cached and not expired
         if cached_episodes and (datetime.now(timezone.utc) - cached_episodes[0].created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
-            logger.info(f"Episode list cache hit for AniList ID: {anilist_id}")
+            logger.info(f"تم العثور على قائمة الحلقات في الكاش لمعرف: {anilist_id}")
             episodes_list = [
                 {"ep_number": ep.ep_number, "play_url": ep.play_url}
                 for ep in cached_episodes
             ]
         else:
-            logger.info(f"Episode list cache miss or expired for AniList ID: {anilist_id}. Scraping page...")
-            # Need to scrape from AniNeko
-            # 1. Search anime on scraper to get slug
-            search_title = title_romaji or title_english
-            scraper_results = await search_anime_scraper(search_title)
+            logger.info(f"الكاش غير متوفر لقائمة الحلقات لمعرف: {anilist_id}. جاري جلب الصفحة...")
             
-            if not scraper_results:
-                if title_english and title_english != title_romaji:
-                    logger.info(f"Romaji search failed. Retrying search with English title: {title_english}")
-                    scraper_results = await search_anime_scraper(title_english)
-                    
-            if not scraper_results:
-                logger.warning(f"Could not find anime '{search_title}' on AniNeko mirrors.")
-                await status_msg.edit_text("❌ Could not find this anime on the streaming server mirrors.")
-                await state.clear()
-                return
+            # Resolve slug
+            anime_slug = None
+            if title_romaji and title_romaji.startswith("WITANIME:"):
+                anime_slug = title_romaji.split(":", 1)[1]
+            else:
+                # Search slug on scraper
+                search_title = title_romaji or title_english
+                scraper_results = await search_anime_scraper(search_title)
                 
-            # Pick first/best result slug
-            anime_slug = scraper_results[0]["slug"]
-            logger.info(f"Matched anime slug on AniNeko: '{anime_slug}'")
+                if not scraper_results:
+                    if title_english and title_english != title_romaji:
+                        logger.info(f"فشل البحث بالروماجي. إعادة المحاولة بالإنجليزية: {title_english}")
+                        scraper_results = await search_anime_scraper(title_english)
+                        
+                if not scraper_results:
+                    logger.warning(f"لم يتم العثور على الأنمي '{search_title}' في WitAnime.")
+                    await status_msg.edit_text("❌ لم يتم العثور على هذا الأنمي في خوادم البث المساعدة.")
+                    await state.clear()
+                    return
+                anime_slug = scraper_results[0]["slug"]
             
-            # 2. Get list of episodes
+            logger.info(f"اسم الأنمي اللطيف (Slug) على WitAnime: '{anime_slug}'")
+            
             scraped_eps = await get_episodes_scraper(anime_slug)
             if not scraped_eps:
-                logger.error(f"Failed to parse episode list for slug: {anime_slug}")
-                await status_msg.edit_text("❌ Failed to parse episode list from mirror.")
+                logger.error(f"فشل في تحليل الحلقات للاسم اللطيف: {anime_slug}")
+                await status_msg.edit_text("❌ فشل في جلب قائمة الحلقات من سيرفر البث.")
                 await state.clear()
                 return
                 
             episodes_list = scraped_eps
             
-            # 3. Update Cache
             # Clear old cache
             if cached_episodes:
-                logger.info(f"Deleting expired episode cache for AniList ID: {anilist_id}")
+                logger.info(f"حذف الكاش القديم للحلقات لمعرف: {anilist_id}")
                 for old_ep in cached_episodes:
                     await db_session.delete(old_ep)
             
-            # Insert new episodes
-            logger.info(f"Caching {len(episodes_list)} parsed episodes for AniList ID: {anilist_id}")
+            # Cache new list
+            logger.info(f"حفظ {len(episodes_list)} حلقة في الكاش لمعرف: {anilist_id}")
             for ep in episodes_list:
                 db_ep = EpisodeCache(
                     anilist_id=anilist_id,
@@ -119,24 +119,23 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
                 break
                 
         if not matched_ep:
-            logger.info(f"Episode {requested_ep} not found in the parsed list.")
+            logger.info(f"الحلقة {requested_ep} غير موجودة في القائمة المستخرجة.")
             ep_numbers = [e["ep_number"] for e in episodes_list]
             if len(ep_numbers) > 10:
-                available_range = f"from `{ep_numbers[0]}` to `{ep_numbers[-1]}`"
+                available_range = f"من `{ep_numbers[0]}` إلى `{ep_numbers[-1]}`"
             else:
                 available_range = ", ".join([f"`{n}`" for n in ep_numbers])
                 
             await status_msg.edit_text(
-                f"❌ Episode `{requested_ep}` not found.\n"
-                f"Available episodes: {available_range}.\n\n"
-                f"🔢 **Please enter a valid episode number:**",
+                f"❌ لم يتم العثور على الحلقة `{requested_ep}`.\n"
+                f"الحلقات المتاحة: {available_range}.\n\n"
+                f"🔢 **يرجى إدخال رقم حلقة صحيح:**",
                 parse_mode="Markdown"
             )
             return
 
-        # Episode matched, get download mirrors
         play_url = matched_ep["play_url"]
-        logger.info(f"Matched Episode {matched_ep['ep_number']}: Play page is {play_url}")
+        logger.info(f"تطابق الحلقة {matched_ep['ep_number']}: رابط المشاهدة هو {play_url}")
         
         # Check download cache
         dl_stmt = select(DownloadCache).where(DownloadCache.play_url == play_url)
@@ -147,32 +146,32 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
         db_cache_id = None
         
         if cached_dl and (datetime.now(timezone.utc) - cached_dl.created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
-            logger.info(f"Download links cache hit for play URL: {play_url}")
+            logger.info(f"تم العثور على روابط التحميل في الكاش للرابط: {play_url}")
             qualities = cached_dl.qualities
             db_cache_id = cached_dl.id
         else:
-            logger.info(f"Download links cache miss/expired for play URL: {play_url}. Scraping links...")
-            await status_msg.edit_text("🔄 Resolving direct download links for the episode...")
+            logger.info(f"روابط التحميل غير متوفرة في الكاش للرابط: {play_url}. جاري استخراج الروابط...")
+            await status_msg.edit_text("🔄 جاري استخراج روابط التحميل المباشرة للحلقة...")
             scraped_links = await get_download_links_scraper(play_url)
             
             if not scraped_links:
-                logger.error(f"Failed to scrape download links from play page: {play_url}")
-                await status_msg.edit_text("❌ Failed to parse download links for this episode. Try again later.")
+                logger.error(f"فشل في استخراج روابط التحميل من رابط المشاهدة: {play_url}")
+                await status_msg.edit_text("❌ فشل في استخراج روابط التحميل لهذه الحلقة. يرجى المحاولة لاحقاً.")
                 await state.clear()
                 return
                 
             qualities = scraped_links
             
-            # Cache resolved download links
+            # Cache resolved links
             if cached_dl:
-                logger.info(f"Updating expired download cache for play URL: {play_url}")
+                logger.info(f"تحديث كاش روابط التحميل المنتهي للرابط: {play_url}")
                 cached_dl.qualities = qualities
                 cached_dl.created_at = datetime.now(timezone.utc)
                 db_session.add(cached_dl)
                 await db_session.commit()
                 db_cache_id = cached_dl.id
             else:
-                logger.info(f"Creating new download cache entry for play URL: {play_url}")
+                logger.info(f"إنشاء كاش روابط تحميل جديد للرابط: {play_url}")
                 new_dl = DownloadCache(
                     play_url=play_url,
                     qualities=qualities
@@ -183,7 +182,7 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
                 
         # Prompt user to choose video quality
         keyboard_buttons = [
-            [InlineKeyboardButton(text="⭐ Auto (Smart Size <= 2GB)", callback_data=f"dl:auto:{db_cache_id}")]
+            [InlineKeyboardButton(text="⭐ تلقائي (حجم ذكي <= 2 جيجابايت)", callback_data=f"dl:auto:{db_cache_id}")]
         ]
         
         quality_row = []
@@ -197,9 +196,9 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
         
         await status_msg.delete()
         await message.answer(
-            f"🎬 **Anime**: {anime_title}\n"
-            f"🔢 **Episode**: {matched_ep['ep_number']}\n\n"
-            f"Choose your download quality below:",
+            f"🎬 **الأنمي**: {anime_title}\n"
+            f"🔢 **الحلقة**: {matched_ep['ep_number']}\n\n"
+            f"اختر جودة التحميل المفضلة أدناه:",
             reply_markup=markup,
             parse_mode="Markdown"
         )
@@ -208,8 +207,8 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
         await state.clear()
         
     except Exception:
-        logger.exception("Error in process while processing episode selection")
-        await status_msg.edit_text("❌ Error processing download. Please try again.")
+        logger.exception("خطأ أثناء معالجة اختيار الحلقة")
+        await status_msg.edit_text("❌ حدث خطأ أثناء معالجة التحميل. يرجى المحاولة مجدداً.")
         await state.clear()
 
 @router.callback_query(F.data.startswith("dl:"))
@@ -227,8 +226,8 @@ async def handle_download_callback(callback: CallbackQuery, db_session: AsyncSes
     dl_cache = res.scalar_one_or_none()
     
     if not dl_cache:
-        logger.warning(f"Download cache entry not found or expired (ID: {cache_id})")
-        await callback.answer("❌ Episode download link expired. Please search again.", show_alert=True)
+        logger.warning(f"لم يتم العثور على روابط تحميل في الكاش أو انتهت صلاحيتها (معرف الكاش: {cache_id})")
+        await callback.answer("❌ انتهت صلاحية رابط تحميل الحلقة. يرجى إعادة البحث.", show_alert=True)
         return
         
     await callback.answer()
@@ -239,10 +238,11 @@ async def handle_download_callback(callback: CallbackQuery, db_session: AsyncSes
     except Exception:
         pass
         
-    logger.info(f"Quality selected: '{requested_quality}' (Download Cache ID: {cache_id}, User ID: {callback.from_user.id})")
+    logger.info(f"تم اختيار الجودة: '{requested_quality}' (معرف الكاش: {cache_id}، المستخدم: {callback.from_user.id})")
     await process_and_send_video(
         bot=callback.bot,
         message=callback.message,
         qualities=dl_cache.qualities,
         requested_quality=requested_quality
     )
+

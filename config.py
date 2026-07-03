@@ -11,7 +11,7 @@ class Config:
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///bot.db").strip()
     TELEGRAM_API_SERVER = os.getenv("TELEGRAM_API_SERVER", "").strip() or None
     PROXY_URL = os.getenv("PROXY_URL", "").strip() or None
-    GOGOANIME_BASE_URL = os.getenv("GOGOANIME_BASE_URL", "https://gogoanime3.co").strip()
+    SUPER_ADMIN_ID = int(os.getenv("SUPER_ADMIN_ID", "0").strip())
     
     # Parse MOCK_MODE boolean
     mock_mode_str = os.getenv("MOCK_MODE", "True").strip().lower()
@@ -34,6 +34,7 @@ class Config:
         print(f"Database URL: {cls.DATABASE_URL}")
         print(f"Proxy URL: {cls.PROXY_URL or 'None'}")
         print(f"Mock Mode: {cls.MOCK_MODE}")
+        print(f"Super Admin ID: {cls.SUPER_ADMIN_ID}")
         print(f"Telegram API Server: {cls.TELEGRAM_API_SERVER or 'Default (Official)'}")
         print("----------------------------")
 

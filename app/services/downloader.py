@@ -261,16 +261,15 @@ async def download_hls(
                         total_mb = estimated_total_size / (1024 * 1024)
                         
                         progress_text = (
-                            f"📥 **Downloading HLS stream (Parallel Mode)...**\n"
-                            f"Quality: `{quality}`\n"
-                            f"Progress: `{percentage:.1f}%` `{bar}` (Segment {next_to_write}/{total_segments})\n"
-                            f"Downloaded: `{dl_mb:.1f} MB` / `{total_mb:.1f} MB` (estimated)\n"
-                            f"Speed: `{speed_mb:.2f} MB/s`"
+                            f"📥 **جاري تحميل البث (وضع التوازي)...**\n"
+                            f"الجودة: `{quality}`\n"
+                            f"نسبة التقدم: `{percentage:.1f}%` `{bar}` (الجزئية {next_to_write}/{total_segments})\n"
+                            f"الحجم المحمل: `{dl_mb:.1f} ميجابايت` / `{total_mb:.1f} ميجابايت` (تقديري)\n"
+                            f"السرعة: `{speed_mb:.2f} ميجابايت/ثانية`"
                         )
                         
-                        # Avoid logging per segment details to minimize CPU/IO logging overhead. Only log every 10%
                         if int(percentage) % 10 == 0:
-                            logger.info(f"Download progress: {percentage:.1f}% - {dl_mb:.1f}/{total_mb:.1f} MB - Speed: {speed_mb:.2f} MB/s")
+                            logger.info(f"تقدم التحميل: {percentage:.1f}% - {dl_mb:.1f}/{total_mb:.1f} ميجابايت - السرعة: {speed_mb:.2f} ميجابايت/ثانية")
                             
                         try:
                             await status_message.edit_text(progress_text, parse_mode="Markdown")
@@ -331,14 +330,14 @@ async def download_file(
                             total_mb = total_size / (1024 * 1024) if total_size > 0 else 0
                             
                             progress_text = (
-                                f"📥 **Downloading episode...**\n"
-                                f"Quality: `{quality}`\n"
-                                f"Progress: `{percentage:.1f}%` `{bar}`\n"
-                                f"Downloaded: `{dl_mb:.1f} MB` / `{total_mb:.1f} MB`\n"
-                                f"Speed: `{speed_mb:.2f} MB/s`"
+                                f"📥 **جاري تحميل الحلقة...**\n"
+                                f"الجودة: `{quality}`\n"
+                                f"نسبة التقدم: `{percentage:.1f}%` `{bar}`\n"
+                                f"الحجم المحمل: `{dl_mb:.1f} ميجابايت` / `{total_mb:.1f} ميجابايت`\n"
+                                f"السرعة: `{speed_mb:.2f} ميجابايت/ثانية`"
                             )
                             if int(percentage) % 10 == 0:
-                                logger.info(f"Download progress: {percentage:.1f}% - {dl_mb:.1f}/{total_mb:.1f} MB - Speed: {speed_mb:.2f} MB/s")
+                                logger.info(f"تقدم التحميل: {percentage:.1f}% - {dl_mb:.1f}/{total_mb:.1f} ميجابايت - السرعة: {speed_mb:.2f} ميجابايت/ثانية")
                             try:
                                 await status_message.edit_text(progress_text, parse_mode="Markdown")
                             except Exception:
@@ -360,37 +359,37 @@ async def process_and_send_video(
     Downloads the selected quality, checks file sizes against Bot API limitations,
     and uploads the video directly using message.answer_video().
     """
-    status_msg = await message.answer("🔄 Resolving streaming link sizes...")
+    status_msg = await message.answer("🔄 جاري استخراج أحجام روابط البث...")
     
     try:
         quality, download_url, size = await select_best_quality(qualities, requested_quality)
     except Exception as e:
         logger.exception("Error in process while selecting best quality")
-        await status_msg.edit_text(f"❌ Failed to resolve links: {e}")
+        await status_msg.edit_text(f"❌ فشل في جلب الروابط: {e}")
         return
 
     size_mb = size / (1024 * 1024)
     await status_msg.edit_text(
-        f"✅ Selected quality: `{quality}` ({size_mb:.1f} MB)\n"
-        f"⏳ Initializing download..."
+        f"✅ الجودة المحددة: `{quality}` ({size_mb:.1f} ميجابايت)\n"
+        f"⏳ جاري بدء التحميل..."
     )
 
     has_local_server = config.TELEGRAM_API_SERVER is not None
     if size > MAX_TELEGRAM_STANDARD_SIZE and not has_local_server:
         await status_msg.edit_text(
-            f"⚠️ **Size warning**:\n"
-            f"The video size is **{size_mb:.1f} MB** which exceeds Telegram's standard bot upload limit of **50MB**.\n\n"
-            f"Since no local Bot API server is configured, here is your direct link instead:\n"
-            f"🔗 [Direct Download Link]({download_url})",
+            f"⚠️ **تنبيه الحجم**:\n"
+            f"حجم الفيديو هو **{size_mb:.1f} ميجابايت** وهو ما يتجاوز حد الرفع المسموح به للبوتات في تلغرام (50 ميجابايت).\n\n"
+            f"بما أنه لم يتم تهيئة خادم Bot API محلي، إليك رابط التحميل المباشر عوضاً عن ذلك:\n"
+            f"🔗 [رابط التحميل المباشر]({download_url})",
             parse_mode="Markdown"
         )
         return
 
     if size > MAX_TELEGRAM_LOCAL_SIZE:
         await status_msg.edit_text(
-            f"❌ The file size is **{size_mb:.1f} GB**, exceeding Telegram's absolute limit of 2GB.\n"
-            f"Please download it directly via your browser:\n"
-            f"🔗 [Direct Link]({download_url})",
+            f"❌ حجم الملف هو **{size_mb:.1f} جيجابايت**، مما يتجاوز حد تلغرام الأقصى (2 جيجابايت).\n"
+            f"يرجى تحميله مباشرة عبر المتصفح:\n"
+            f"🔗 [رابط مباشر]({download_url})",
             parse_mode="Markdown"
         )
         return
@@ -401,17 +400,22 @@ async def process_and_send_video(
     try:
         success = await download_file(download_url, temp_file_path, status_msg, size, quality)
         if not success:
-            await status_msg.edit_text("❌ Download failed. Check proxy or target host.")
+            await status_msg.edit_text("❌ فشل التحميل. يرجى التحقق من البروكسي أو خادم البث.")
             if temp_file_path.exists():
                 os.unlink(temp_file_path)
             return
 
-        await status_msg.edit_text("📤 Uploading video to Telegram...")
+        await status_msg.edit_text("📤 جاري رفع الفيديو إلى تلغرام...")
         video_file = FSInputFile(str(temp_file_path))
+        
+        # Check for custom thumbnail
+        thumb_path = Path(__file__).parent.parent / "data" / "custom_thumb.jpg"
+        thumb_input = FSInputFile(str(thumb_path)) if thumb_path.exists() else None
         
         await message.answer_video(
             video=video_file,
-            caption=f"🎥 **Enjoy your episode!**\nQuality: `{quality}`\nSize: `{size_mb:.1f} MB`",
+            thumbnail=thumb_input,
+            caption=f"🎥 **مشاهدة ممتعة!**\nالجودة: `{quality}`\nالحجم: `{size_mb:.1f} ميجابايت`",
             supports_streaming=True,
             parse_mode="Markdown"
         )
@@ -420,9 +424,9 @@ async def process_and_send_video(
     except Exception as e:
         logger.exception("Error in process while downloading/uploading video")
         await status_msg.edit_text(
-            f"❌ Upload failed: {e}\n\n"
-            f"Here is your direct link instead:\n"
-            f"🔗 [Direct Link]({download_url})"
+            f"❌ فشل الرفع: {e}\n\n"
+            f"إليك رابط التحميل المباشر عوضاً عن ذلك:\n"
+            f"🔗 [رابط مباشر]({download_url})"
         )
     finally:
         if temp_file_path.exists():

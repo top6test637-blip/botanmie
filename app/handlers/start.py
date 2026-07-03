@@ -8,13 +8,13 @@ router = Router(name="start")
 async def cmd_start(message: Message):
     """Handles the /start command."""
     welcome_text = (
-        "👋 **Welcome to the Advanced Anime Search & Downloader Bot!**\n\n"
-        "This bot normalizes queries using **AniList GraphQL**, searches for available streaming links, "
-        "and sends video files directly to you. It also implements **Smart Size Logic** to automatically "
-        "downgrade video quality if a file exceeds Telegram's 2GB size limit.\n\n"
-        "🔍 **How to use**:\n"
-        "Just send the name of the anime you want to search (e.g. `Luffy`, `One Piece`, or even typos like `One Peice` or Arabic names).\n\n"
-        "Type /help at any time to see the bot instructions."
+        "👋 **مرحباً بك في بوت البحث وتحميل الأنمي المتقدم!**\n\n"
+        "يقوم هذا البوت بتنظيم عمليات البحث باستخدام **AniList GraphQL**، والبحث عن روابط البث المتاحة، "
+        "وإرسال ملفات الفيديو إليك مباشرة. كما أنه يطبق **ذكاء حجم الملف** لتقليل جودة الفيديو تلقائياً "
+        "إذا تجاوز الملف حد حجم تلغرام البالغ 2 جيجابايت.\n\n"
+        "🔍 **طريقة الاستخدام**:\n"
+        "أرسل اسم الأنمي الذي تريد البحث عنه (مثال: `Luffy` أو `One Piece` أو أسماء باللغة العربية).\n\n"
+        "اكتب /help في أي وقت لعرض تعليمات البوت."
     )
     await message.answer(welcome_text, parse_mode="Markdown")
 
@@ -22,11 +22,11 @@ async def cmd_start(message: Message):
 async def cmd_help(message: Message):
     """Handles the /help command."""
     help_text = (
-        "ℹ️ **Bot Instructions**:\n\n"
-        "1. **Search**: Send any anime name. The bot resolves character names and typos into the official English or Romaji titles.\n"
-        "2. **Select**: Choose your desired anime from the search results menu.\n"
-        "3. **Episode Number**: Enter the exact episode number when prompted. (No huge, laggy button grids!).\n"
-        "4. **Download Quality**: Select a specific quality, or choose **Auto (Smart Size)** to let the bot select the highest resolution under 2GB.\n\n"
-        "⚙️ *Note: Standard Telegram Bot limits uploads to 50MB. Run with a local Bot API server to upload up to 2GB.*"
+        "ℹ️ **تعليمات البوت**:\n\n"
+        "1. **البحث**: أرسل اسم الأنمي. يقوم البوت بحل أسماء الشخصيات والأخطاء الإملائية إلى العناوين الرسمية.\n"
+        "2. **الاختيار**: اختر الأنمي المطلوب من قائمة نتائج البحث.\n"
+        "3. **رقم الحلقة**: اكتب رقم الحلقة المطلوبة عندما يطلب منك البوت ذلك.\n"
+        "4. **جودة التحميل**: اختر الجودة المطلوبة، أو اختر **تلقائي (حجم ذكي)** لجعل البوت يختار أعلى جودة مناسبة تحت 2 جيجابايت.\n\n"
+        "⚙️ *ملاحظة: تقتصر حدود رفع البوتات القياسية في تلغرام على 50 ميجابايت. يتميز هذا البوت بدعم الرفع حتى 2 جيجابايت عند تشغيله مع خادم Bot API محلي.*"
     )
     await message.answer(help_text, parse_mode="Markdown")

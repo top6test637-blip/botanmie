@@ -188,7 +188,7 @@ async def search_anime_scraper(title: str) -> List[Dict[str, Any]]:
     """Searches for anime on WitAnime and resolves unique parent series."""
     logger.info(f"Starting search for anime: {title}")
     if config.MOCK_MODE:
-        logger.info("[MOCK MODE] Simulating search result on Gogoanime/WitAnime.")
+        logger.info("[MOCK MODE] Simulating search result on WitAnime.")
         return [{"title": f"{title} (TV)", "slug": "mock-anime-slug"}]
 
     search_url = f"https://witanime.pics/?search_param=anime&s={quote(title)}"
@@ -230,53 +230,83 @@ async def search_anime_scraper(title: str) -> List[Dict[str, Any]]:
             return []
 
 async def get_episodes_scraper(anime_slug: str) -> List[Dict[str, Any]]:
-    """Retrieves the list of episodes for a WitAnime series slug."""
-    logger.info(f"Fetching episodes list for anime slug: {anime_slug}")
+    """Retrieves the list of episodes for a WitAnime series slug, crawling pagination if present."""
+    logger.info(f"جاري جلب قائمة الحلقات للأنمي: {anime_slug}")
     if config.MOCK_MODE:
         logger.info("[MOCK MODE] Generating mock episodes list.")
         return [{"ep_number": str(i), "play_url": f"https://mock-play-page.com/{anime_slug}-episode-{i}"} for i in range(1, 13)]
 
-    anime_url = f"https://witanime.pics/anime/{anime_slug}/"
     connector = get_connector()
+    episodes = []
+    seen_urls = set()
     
     async with aiohttp.ClientSession(connector=connector) as session:
-        try:
-            html = await get_html(anime_url, session)
-            match = re.search(r"var processedEpisodeData = '([^']+)';", html)
-            
-            if not match:
-                # Page has no processedEpisodeData: likely a movie detail page with direct links
-                logger.info(f"No processedEpisodeData found for {anime_slug}. Treating as a single movie post.")
-                return [{
-                    "ep_number": "1",
-                    "play_url": anime_url
-                }]
+        page_num = 1
+        while True:
+            if page_num == 1:
+                url = f"https://witanime.pics/anime/{anime_slug}/"
+            else:
+                url = f"https://witanime.pics/anime/{anime_slug}/page/{page_num}/"
                 
+            try:
+                headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
+                async with session.get(url, headers=headers, timeout=15) as response:
+                    if response.status != 200:
+                        logger.info(f"توقف جلب الصفحات عند الصفحة {page_num} بسبب رمز الحالة: {response.status}")
+                        break
+                    html = await response.text()
+            except Exception as e:
+                logger.warning(f"فشل الاتصال بالصفحة {page_num}: {e}")
+                break
+
+            match = re.search(r"var processedEpisodeData = '([^']+)';", html)
+            if not match:
+                if page_num == 1:
+                    logger.info(f"لم يتم العثور على processedEpisodeData للأنمي {anime_slug}. يتم التعامل معه كفيلم فردي.")
+                    return [{
+                        "ep_number": "1",
+                        "play_url": f"https://witanime.pics/anime/{anime_slug}/"
+                    }]
+                else:
+                    break
+                    
             episodes_data = decrypt_episodes(match.group(1))
-            episodes = []
+            if not episodes_data:
+                break
+                
+            new_episodes_found = 0
             for ep in episodes_data:
                 ep_num = str(ep.get("number"))
                 play_url = ep.get("url")
                 if play_url.startswith("https://witanime.you"):
                     play_url = play_url.replace("https://witanime.you", "https://witanime.pics")
-                episodes.append({
-                    "ep_number": ep_num,
-                    "play_url": play_url
-                })
+                elif play_url.startswith("https://witanime.life"):
+                    play_url = play_url.replace("https://witanime.life", "https://witanime.pics")
                 
-            # Numeric sorting key
-            def get_ep_num(e):
-                try:
-                    return float(e["ep_number"])
-                except ValueError:
-                    return 999999.0
-            episodes.sort(key=get_ep_num)
+                if play_url not in seen_urls:
+                    seen_urls.add(play_url)
+                    episodes.append({
+                        "ep_number": ep_num,
+                        "play_url": play_url
+                    })
+                    new_episodes_found += 1
             
-            logger.info(f"Parsed {len(episodes)} episodes for anime: {anime_slug}")
-            return episodes
-        except Exception:
-            logger.exception(f"Error in process while getting episodes for {anime_slug}")
-            return []
+            if new_episodes_found == 0:
+                logger.info(f"لم يتم العثور على حلقات جديدة في الصفحة {page_num}. إيقاف جلب الصفحات.")
+                break
+                
+            logger.info(f"تم جلب {new_episodes_found} حلقة جديدة من الصفحة {page_num}")
+            page_num += 1
+            
+    def get_ep_num(e):
+        try:
+            return float(e["ep_number"])
+        except ValueError:
+            return 999999.0
+    episodes.sort(key=get_ep_num)
+    
+    logger.info(f"إجمالي الحلقات المستخرجة للأنمي {anime_slug}: {len(episodes)}")
+    return episodes
 
 async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession) -> Optional[str]:
     """Resolves and extracts .m3u8 master playlist using custom player unpacker."""

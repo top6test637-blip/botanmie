@@ -10,7 +10,7 @@ from aiogram.enums import ParseMode
 from config import config
 from app.database.connection import init_db
 from app.middlewares.db_session import DbSessionMiddleware
-from app.handlers import start, search, download
+from app.handlers import start, search, download, admin
 from app.utils.logging_config import logger
 
 async def main():
@@ -51,6 +51,7 @@ async def main():
     dp.update.outer_middleware(DbSessionMiddleware())
 
     # 6. Register Handler Routers
+    dp.include_router(admin.router)
     dp.include_router(start.router)
     dp.include_router(search.router)
     dp.include_router(download.router)

@@ -49,3 +49,13 @@ class UserFavorites(Base):
         UniqueConstraint('user_id', 'anilist_id', name='_user_anime_fav_uc'),
     )
 
+
+class BotAdmin(Base):
+    """Stores dynamically added bot administrators."""
+    __tablename__ = "bot_admins"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    added_by = Column(BigInteger, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
