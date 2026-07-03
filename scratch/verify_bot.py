@@ -25,6 +25,7 @@ from app.database.connection import init_db, AsyncSessionLocal
 from app.database.models import BotAdmin
 from app.utils.auth import is_admin
 from app.services.scraper import get_episodes_scraper
+from app.services.anilist import search_anilist, translate_to_english
 
 async def run_proxy_check():
     if config.PROXY_URL:
@@ -91,6 +92,18 @@ async def test_database():
         is_mock_final = await is_admin(mock_user_id, session)
         print(f"Is Mock User authorized after cleanup? {is_mock_final} (Expected: False)")
 
+async def test_translation():
+    print("\n--- TESTING GOOGLE TRANSLATION ---")
+    query = "هنتر اكس هنتر"
+    translated = await translate_to_english(query)
+    print(f"Original: '{query}' -> Translated: '{translated}'")
+    
+    print("\n--- TESTING ANILIST SEARCH WITH ARABIC ---")
+    results = await search_anilist(query)
+    print(f"AniList returned {len(results)} results.")
+    if results:
+        print(f"Top AniList result title: {results[0]['title_english']} (ID: {results[0]['anilist_id']})")
+
 async def test_scraper():
     print("\n--- TESTING PAGINATED EPISODES SCRAPER ---")
     slug = "one-piece"
@@ -104,6 +117,7 @@ async def main():
     try:
         await run_proxy_check()
         await test_database()
+        await test_translation()
         await test_scraper()
         print("\nVerification completed successfully!")
     except Exception as e:

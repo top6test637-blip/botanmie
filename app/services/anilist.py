@@ -1,25 +1,44 @@
 import aiohttp
 from typing import List, Dict, Any, Optional
-from config import config
 from aiohttp_socks import ProxyConnector
+from urllib.parse import quote
+from config import config
 from app.utils.logging_config import logger
+
+async def translate_to_english(text: str) -> Optional[str]:
+    """Translates Arabic text to English using Google Translate free API."""
+    # Check if text contains Arabic characters (Unicode block 0600-06FF)
+    if not any(ord(c) >= 0x0600 and ord(c) <= 0x06FF for c in text):
+        return None
+        
+    url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={quote(text)}"
+    try:
+        # Direct connection for translation to ensure fast and reliable execution
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    translated = data[0][0][0]
+                    logger.info(f"Translated Arabic query '{text}' to '{translated}' using Google Translate API")
+                    return translated
+    except Exception as e:
+        logger.warning(f"Failed to translate query to English: {e}")
+    return None
 
 # GraphQL query for searching anime directly
 MEDIA_QUERY = """
 query ($search: String) {
-  Page (perPage: 5) {
-    media (search: $search, type: ANIME) {
+  Page(page: 1, perPage: 10) {
+    media(search: $search, type: ANIME) {
       id
       title {
         romaji
         english
-        native
       }
       description
       coverImage {
         large
       }
-      synonyms
       episodes
     }
   }
@@ -29,21 +48,22 @@ query ($search: String) {
 # GraphQL query for searching anime via character names
 CHARACTER_QUERY = """
 query ($search: String) {
-  Page (perPage: 3) {
-    characters (search: $search) {
-      media (type: ANIME, perPage: 3) {
+  Page(page: 1, perPage: 5) {
+    characters(search: $search) {
+      name {
+        full
+      }
+      media(type: ANIME, perPage: 5) {
         nodes {
           id
           title {
             romaji
             english
-            native
           }
           description
           coverImage {
             large
           }
-          synonyms
           episodes
         }
       }
@@ -66,7 +86,11 @@ async def search_anilist(query: str) -> List[Dict[str, Any]]:
     Search AniList GraphQL API.
     Resolves typos, Franco-Arabic, and character names into official titles.
     """
-    logger.info(f"Starting search on AniList for query: {query}")
+    # Translate Arabic queries to English first to ensure AniList GraphQL matching works
+    translated_query = await translate_to_english(query)
+    search_query = translated_query if translated_query else query
+    
+    logger.info(f"Starting search on AniList for query: {search_query} (original: {query})")
     url = "https://graphql.anilist.co"
     
     for attempt in range(2):
@@ -76,7 +100,7 @@ async def search_anilist(query: str) -> List[Dict[str, Any]]:
             
         payload = {
             "query": MEDIA_QUERY,
-            "variables": {"search": query}
+            "variables": {"search": search_query}
         }
         results = []
         

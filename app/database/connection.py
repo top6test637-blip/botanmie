@@ -26,3 +26,15 @@ async def init_db():
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     print("Database tables initialized successfully.")
+    
+    # Clear old legacy caches from previous sessions
+    async with AsyncSessionLocal() as session:
+        try:
+            from sqlalchemy import text
+            await session.execute(text("DELETE FROM search_cache;"))
+            await session.execute(text("DELETE FROM episode_cache;"))
+            await session.execute(text("DELETE FROM download_cache;"))
+            await session.commit()
+            print("Legacy database caches cleared successfully.")
+        except Exception as e:
+            print(f"Error clearing legacy database caches: {e}")
