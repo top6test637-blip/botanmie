@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -35,7 +35,7 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
     resolved_anime = []
 
     # If cached and not expired (24h)
-    if cached and (datetime.utcnow() - cached.created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
+    if cached and (datetime.now(timezone.utc) - cached.created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
         resolved_anime.append({
             "anilist_id": cached.anilist_id,
             "title_english": cached.title_english,
@@ -65,7 +65,7 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
                 cached.title_romaji = top_result["title_romaji"]
                 cached.description = top_result["description"]
                 cached.image_url = top_result["image_url"]
-                cached.created_at = datetime.utcnow()
+                cached.created_at = datetime.now(timezone.utc)
             else:
                 # Add new entry
                 new_cache = SearchCache(

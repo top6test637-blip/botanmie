@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
@@ -48,7 +48,7 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
         episodes_list = []
         
         # If cached and not expired
-        if cached_episodes and (datetime.utcnow() - cached_episodes[0].created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
+        if cached_episodes and (datetime.now(timezone.utc) - cached_episodes[0].created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
             episodes_list = [
                 {"ep_number": ep.ep_number, "play_url": ep.play_url}
                 for ep in cached_episodes
@@ -135,7 +135,7 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
         qualities = {}
         db_cache_id = None
         
-        if cached_dl and (datetime.utcnow() - cached_dl.created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
+        if cached_dl and (datetime.now(timezone.utc) - cached_dl.created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
             qualities = cached_dl.qualities
             db_cache_id = cached_dl.id
         else:
@@ -153,7 +153,7 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
             # Cache resolved download links
             if cached_dl:
                 cached_dl.qualities = qualities
-                cached_dl.created_at = datetime.utcnow()
+                cached_dl.created_at = datetime.now(timezone.utc)
                 db_session.add(cached_dl)
                 await db_session.commit()
                 db_cache_id = cached_dl.id

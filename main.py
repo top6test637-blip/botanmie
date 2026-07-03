@@ -29,7 +29,7 @@ async def main():
         try:
             print(f"Connecting using custom local Bot API server: {config.TELEGRAM_API_SERVER}")
             api_server = TelegramAPIServer.from_base(config.TELEGRAM_API_SERVER)
-            session = AiohttpSession(api_server=api_server)
+            session = AiohttpSession(api=api_server)
         except Exception as e:
             print(f"Error creating custom Bot API session: {e}. Falling back to default.")
             session = None
