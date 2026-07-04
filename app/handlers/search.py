@@ -231,7 +231,7 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
         if scraped_data.get("poster_url") and (not cache_entry.image_url or "default" in cache_entry.image_url):
             cache_entry.image_url = scraped_data["poster_url"]
             updated = True
-        if scraped_data.get("description") and (not cache_entry.description or "نتائج بحث" in cache_entry.description or cache_entry.description == "لا يوجد"):
+        if scraped_data.get("description") and scraped_data["description"] != "لا يوجد":
             cache_entry.description = scraped_data["description"]
             updated = True
         if scraped_data.get("duration"):

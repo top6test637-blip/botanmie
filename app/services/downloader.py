@@ -292,8 +292,10 @@ async def download_hls(
             ]
             
             downloaded_bytes = 0
+            completed_segments = 0
             start_time = time.time()
             last_update = 0
+            last_logged_decile = -1
             
             buffered_data = {}
             next_to_write = 0
@@ -308,6 +310,7 @@ async def download_hls(
                         
                     buffered_data[idx] = seg_data
                     downloaded_bytes += len(seg_data)
+                    completed_segments += 1
                     
                     # Write consecutive downloaded segments to disk sequentially
                     while next_to_write in buffered_data:
@@ -317,10 +320,14 @@ async def download_hls(
                         
                     # Throttle progress messages to every 4 seconds to reduce CPU overhead
                     now = time.time()
-                    if now - last_update > 4.0 or next_to_write == total_segments:
+                    if now - last_update > 4.0 or completed_segments == total_segments:
                         elapsed = now - start_time
                         speed = downloaded_bytes / elapsed if elapsed > 0 else 0
-                        percentage = (next_to_write / total_segments) * 100
+                        percentage = (completed_segments / total_segments) * 100
+                        
+                        # Dynamically self-correct estimated total size based on average downloaded segment size
+                        avg_seg_size = downloaded_bytes / completed_segments
+                        estimated_total_size = avg_seg_size * total_segments
                         
                         bar = make_progress_bar(percentage)
                         speed_mb = speed / (1024 * 1024)
@@ -330,13 +337,15 @@ async def download_hls(
                         progress_text = (
                             f"📥 **جاري تحميل البث (وضع التوازي)...**\n"
                             f"الجودة: `{quality}`\n"
-                            f"نسبة التقدم: `{percentage:.1f}%` `{bar}` (الجزئية {next_to_write}/{total_segments})\n"
+                            f"نسبة التقدم: `{percentage:.1f}%` `{bar}` (الجزئية {completed_segments}/{total_segments})\n"
                             f"الحجم المحمل: `{dl_mb:.1f} ميجابايت` / `{total_mb:.1f} ميجابايت` (تقديري)\n"
                             f"السرعة: `{speed_mb:.2f} ميجابايت/ثانية`"
                         )
                         
-                        if int(percentage) % 10 == 0:
+                        current_decile = int(percentage) // 10
+                        if current_decile > last_logged_decile:
                             logger.info(f"تقدم التحميل: {percentage:.1f}% - {dl_mb:.1f}/{total_mb:.1f} ميجابايت - السرعة: {speed_mb:.2f} ميجابايت/ثانية")
+                            last_logged_decile = current_decile
                             
                         try:
                             await status_message.edit_text(progress_text, parse_mode="Markdown")
