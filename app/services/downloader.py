@@ -161,10 +161,11 @@ async def download_segment(
 ) -> Tuple[int, Optional[bytes]]:
     """Downloads a single segment chunk, checking and stripping fake PNG signature with retry mechanism."""
     max_retries = 5
+    seg_timeout = aiohttp.ClientTimeout(total=120, sock_read=60)
     async with semaphore:
         for attempt in range(max_retries):
             try:
-                async with session.get(seg_url, headers=headers, ssl=False, timeout=30) as resp:
+                async with session.get(seg_url, headers=headers, ssl=False, timeout=seg_timeout) as resp:
                     if resp.status == 200:
                         seg_data = await resp.read()
                         if is_png_wrapped and seg_data.startswith(b"\x89PNG"):
