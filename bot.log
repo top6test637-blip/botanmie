@@ -833,3 +833,7 @@ TimeoutError
 [2026-07-04 14:02:16] [INFO] [bot] [scraper.py:475]: Attempting to resolve embed playlist from: https://www.mp4upload.com/embed-g1hz8dzxk3em.html
 [2026-07-04 14:02:16] [INFO] [bot] [scraper.py:488]: Resolved direct MP4 stream: https://a3.mp4upload.com:183/d/xsx77cwkz3b4quuol2xr2y2ilov55kfhnj5rh5vuuefuqvdsi2cwtthhovn5pl5kdjphlk23/video.mp4
 [2026-07-04 14:02:17] [INFO] [bot] [downloader.py:483]: تقدم التحميل: 0.8% - 0.0/2.0 ميجابايت - السرعة: 0.03 ميجابايت/ثانية
+[2026-07-04 19:13:07] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 19:13:07] [INFO] [bot] [main.py:40]: Testing proxy connectivity...
+[2026-07-04 19:13:08] [WARNING] [bot] [main.py:49]: SOCKS5 proxy health check failed: Username and password authentication failure. Disabling proxy and falling back to direct connections.
+[2026-07-04 19:13:08] [INFO] [bot] [main.py:56]: Initializing database schema...
