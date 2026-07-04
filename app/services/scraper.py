@@ -186,12 +186,16 @@ async def parse_m3u8_qualities(master_url: str, session: aiohttp.ClientSession) 
 
 async def search_anime_scraper(title: str) -> List[Dict[str, Any]]:
     """Searches for anime on WitAnime and resolves unique parent series."""
-    logger.info(f"Starting search for anime: {title}")
+    # Normalize title to ASCII-friendly format to avoid Cloudflare 403 blocks on special characters
+    normalized_title = title.replace("×", " x ").replace(":", " ").replace("-", " ")
+    normalized_title = " ".join(normalized_title.split())
+    
+    logger.info(f"Starting search for anime: {normalized_title} (original: {title})")
     if config.MOCK_MODE:
         logger.info("[MOCK MODE] Simulating search result on WitAnime.")
         return [{"title": f"{title} (TV)", "slug": "mock-anime-slug"}]
 
-    search_url = f"https://witanime.pics/?search_param=anime&s={quote(title)}"
+    search_url = f"https://witanime.pics/?search_param=anime&s={quote(normalized_title)}"
     
     for attempt in range(2):
         connector = get_connector()
