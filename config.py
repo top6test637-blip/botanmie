@@ -25,23 +25,23 @@ class Config:
     # Telegram Mini App Base URL (strictly enforce HTTPS for Telegram compatibility)
     webapp_env = os.getenv("WEBAPP_BASE_URL", "").strip()
     if webapp_env:
-        if webapp_env.startswith("http://"):
-            WEBAPP_BASE_URL = webapp_env.replace("http://", "https://")
-        elif not webapp_env.startswith("https://"):
-            WEBAPP_BASE_URL = f"https://{webapp_env}"
-        else:
-            WEBAPP_BASE_URL = webapp_env
+        domain = webapp_env
     else:
-        domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
-        if domain:
-            if domain.startswith("http://"):
-                WEBAPP_BASE_URL = domain.replace("http://", "https://")
-            elif domain.startswith("https://"):
-                WEBAPP_BASE_URL = domain
-            else:
-                WEBAPP_BASE_URL = f"https://{domain}"
-        else:
-            WEBAPP_BASE_URL = "https://botanmie.up.railway.app"
+        domain = (
+            os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+            or os.getenv("RAILWAY_STATIC_URL", "").strip()
+            or os.getenv("RAILWAY_SERVICE_DOMAIN", "").strip()
+        )
+    
+    if domain:
+        # Standardize by removing existing protocol prefixes
+        if domain.startswith("http://"):
+            domain = domain[7:]
+        elif domain.startswith("https://"):
+            domain = domain[8:]
+        WEBAPP_BASE_URL = f"https://{domain}"
+    else:
+        WEBAPP_BASE_URL = "https://botanmie.up.railway.app"
 
     # Static list of 10 modern organic browser User-Agents for dynamic header rotation
     USER_AGENTS = [
@@ -78,6 +78,15 @@ class Config:
         print(f"Channel Username: {cls.CHANNEL_USERNAME or 'None'}")
         print(f"Telegram API Server: {cls.TELEGRAM_API_SERVER or 'Default (Official)'}")
         print(f"WebApp Base URL: {cls.WEBAPP_BASE_URL}")
+        
+        # Debug env variables
+        print("--- DEBUG RAILWAY ENVIRONMENT ---")
+        for k, v in sorted(os.environ.items()):
+            if k.startswith("RAILWAY_") or k in ("PORT", "WEBAPP_BASE_URL"):
+                if "token" in k.lower() or "secret" in k.lower() or "password" in k.lower() or "database_url" in k.lower():
+                    v = "***"
+                print(f"{k}: {v}")
+        print("---------------------------------")
         print("----------------------------")
 
 # Create a global config instance
