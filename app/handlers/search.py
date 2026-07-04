@@ -332,13 +332,13 @@ async def render_episode_keyboard(
         for start in range(1, total_episodes + 1, 100):
             end = min(start + 99, total_episodes)
             blocks.append(InlineKeyboardButton(
-                text=f"📦 {start} - {end}",
+                text=f"📂 {start} - {end}",
                 callback_data=f"ep_block:{anilist_id}:{start}:{end}"
             ))
         inline_keyboard = [blocks[i:i+2] for i in range(0, len(blocks), 2)]
         inline_keyboard.append([
-            InlineKeyboardButton(text="« رجوع للبحث", callback_data=f"back_to_search:{anilist_id}"),
-            InlineKeyboardButton(text="⭐ إضافة إلى المفضلة", callback_data=f"fav_add:{anilist_id}")
+            InlineKeyboardButton(text="🔙 رجوع للبحث 🔍", callback_data=f"back_to_search:{anilist_id}"),
+            InlineKeyboardButton(text="⭐ إضافة للمفضلة", callback_data=f"fav_add:{anilist_id}")
         ])
         markup = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
         
@@ -361,7 +361,7 @@ async def render_episode_keyboard(
         row = []
         for ep in grid_eps:
             row.append(InlineKeyboardButton(
-                text=f"الحلقة {ep.ep_number}",
+                text=f"🔹 الحلقة {ep.ep_number}",
                 callback_data=f"sel_ep_click:{anilist_id}:{ep.ep_number}"
             ))
             if len(row) == 3:
@@ -372,10 +372,10 @@ async def render_episode_keyboard(
             
         bottom_row = []
         if total_episodes > 100:
-            bottom_row.append(InlineKeyboardButton(text="« رجوع للقائمة", callback_data=f"ep_blocks_home:{anilist_id}"))
+            bottom_row.append(InlineKeyboardButton(text="🔙 رجوع للمجموعات 📂", callback_data=f"ep_blocks_home:{anilist_id}"))
         else:
-            bottom_row.append(InlineKeyboardButton(text="« رجوع للبحث", callback_data=f"back_to_search:{anilist_id}"))
-        bottom_row.append(InlineKeyboardButton(text="⭐ إضافة إلى المفضلة", callback_data=f"fav_add:{anilist_id}"))
+            bottom_row.append(InlineKeyboardButton(text="🔙 رجوع للبحث 🔍", callback_data=f"back_to_search:{anilist_id}"))
+        bottom_row.append(InlineKeyboardButton(text="⭐ إضافة للمفضلة", callback_data=f"fav_add:{anilist_id}"))
         inline_keyboard.append(bottom_row)
         markup = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
         

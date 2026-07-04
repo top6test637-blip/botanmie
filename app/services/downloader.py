@@ -468,7 +468,7 @@ async def download_file(
     # Use multipart parallel downloader for direct files to bypass speed caps
     if total_size > 5 * 1024 * 1024:
         logger.info(f"Using multipart downloader for direct URL: {url}")
-        num_parts = 6 if ("mp4upload" in url or "yourupload" in url) else 16
+        num_parts = 32 if ("mp4upload" in url or "yourupload" in url) else 48
         success = await download_multipart(url, target_path, status_message, total_size, quality, num_parts=num_parts)
         if success:
             return True

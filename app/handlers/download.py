@@ -215,19 +215,27 @@ async def prompt_quality_selection(
             pass
             
     keyboard_buttons = [
-        [InlineKeyboardButton(text="⭐ تلقائي (حجم ذكي <= 2 جيجابايت)", callback_data=f"dl:auto:{db_cache_id}")]
+        [InlineKeyboardButton(text="⚡ تلقائي (حجم ذكي <= 2 جيجا)", callback_data=f"dl:auto:{db_cache_id}")]
     ]
+    
+    quality_emojis = {
+        "1080p": "🔴 1080p",
+        "720p": "🔵 720p",
+        "480p": "🟢 480p",
+        "360p": "🟡 360p"
+    }
     
     quality_row = []
     for q in ["1080p", "720p", "480p", "360p"]:
         if q in qualities:
-            quality_row.append(InlineKeyboardButton(text=q, callback_data=f"dl:{q}:{db_cache_id}"))
+            emoji_text = quality_emojis.get(q, q)
+            quality_row.append(InlineKeyboardButton(text=emoji_text, callback_data=f"dl:{q}:{db_cache_id}"))
     if quality_row:
         keyboard_buttons.append(quality_row)
         
     # Always add return to episodes list button
     keyboard_buttons.append([
-        InlineKeyboardButton(text="« رجوع للحلقات", callback_data=f"nav_grid:{anilist_id}")
+        InlineKeyboardButton(text="🔙 رجوع للحلقات 🎬", callback_data=f"nav_grid:{anilist_id}")
     ])
         
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
