@@ -48,7 +48,10 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
 
     # Estimate HLS stream size
     if ".m3u8" in url or "master" in url or "stream" in url:
-        headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
+        referer = "https://witanime.pics/"
+        if "mp4upload" in url:
+            referer = "https://www.mp4upload.com/"
+        headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
         try:
             logger.info(f"Estimating HLS stream size for playlist: {url}")
             async with session.get(url, headers=headers, ssl=False, timeout=10) as resp:
@@ -93,7 +96,10 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
             logger.exception("Error in process while estimating HLS playlist size")
         return 0
 
-    headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
+    referer = "https://witanime.pics/"
+    if "mp4upload" in url:
+        referer = "https://www.mp4upload.com/"
+    headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
     try:
         async with session.head(url, headers=headers, allow_redirects=True, ssl=False, timeout=10) as response:
             if response.status == 200:
@@ -173,7 +179,10 @@ async def download_hls(
     stripping fake PNG headers, and merging segments. Reuses ClientSession with large connection pooling.
     """
     connector = get_session_connector(limit=50)
-    headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
+    referer = "https://witanime.pics/"
+    if "mp4upload" in m3u8_url:
+        referer = "https://www.mp4upload.com/"
+    headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
     
     if config.PROXY_URL:
         logger.info(f"Proxy used for request: {config.PROXY_URL}")
@@ -302,7 +311,10 @@ async def download_file(
         return await download_hls(url, target_path, status_message, quality)
 
     connector = get_session_connector(limit=50)
-    headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
+    referer = "https://witanime.pics/"
+    if "mp4upload" in url:
+        referer = "https://www.mp4upload.com/"
+    headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
     if config.PROXY_URL:
         logger.info(f"Proxy used for request: {config.PROXY_URL}")
         
