@@ -159,7 +159,7 @@ async def download_segment(
     is_png_wrapped: bool,
     semaphore: asyncio.Semaphore
 ) -> Tuple[int, Optional[bytes]]:
-    """Downloads a single segment chunk, checking and stripping fake PNG signature."""
+    """Downloads a single segment chunk, checking and stripping fake PNG signature with retry mechanism."""
     async with semaphore:
         for attempt in range(3):
             try:
@@ -169,8 +169,12 @@ async def download_segment(
                         if is_png_wrapped and seg_data.startswith(b"\x89PNG"):
                             seg_data = seg_data[252:]
                         return idx, seg_data
-            except Exception:
-                await asyncio.sleep(0.5)
+                    else:
+                        logger.warning(f"[Attempt {attempt+1}/3] Segment {idx} download returned status {resp.status}")
+            except Exception as e:
+                logger.warning(f"[Attempt {attempt+1}/3] Segment {idx} download error: {e}")
+            if attempt < 2:
+                await asyncio.sleep(2.0)
         return idx, None
 
 async def download_hls(

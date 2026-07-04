@@ -133,10 +133,40 @@ async def handle_set_thumbnail_url(message: Message, db_session: AsyncSession):
     thumb_path = data_dir / "custom_thumb.jpg"
     thumb_id_path = data_dir / "custom_thumb_id.txt"
     
+    target_url = args
+    if "t.me/" in args:
+        try:
+            import re
+            import aiohttp
+            embed_url = args
+            if "?embed=1" not in embed_url:
+                embed_url = embed_url + "?embed=1" if "?" not in embed_url else embed_url + "&embed=1"
+            
+            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            async with aiohttp.ClientSession() as session:
+                async with session.get(embed_url, headers=headers, ssl=False, timeout=15) as resp:
+                    if resp.status == 200:
+                        html_text = await resp.text()
+                        og_match = re.search(r'<meta\s+property=["\']og:image["\']\s+content=["\']([^"\']+)["\']', html_text)
+                        if not og_match:
+                            og_match = re.search(r'<meta\s+content=["\']([^"\']+)["\']\s+property=["\']og:image["\']', html_text)
+                        if og_match:
+                            target_url = og_match.group(1)
+                            logger.info(f"Resolved Telegram post image URL: {target_url}")
+                        else:
+                            await status_msg.edit_text("❌ لم يتم العثور على صورة معاينة في منشور تيليجرام.")
+                            return
+                    else:
+                        await status_msg.edit_text(f"❌ فشل جلب منشور تيليجرام، رمز الحالة: {resp.status}")
+                        return
+        except Exception as e:
+            await status_msg.edit_text(f"❌ فشل تحليل رابط تيليجرام: {e}")
+            return
+            
     try:
         import aiohttp
         async with aiohttp.ClientSession() as session:
-            async with session.get(args, ssl=False, timeout=30) as resp:
+            async with session.get(target_url, ssl=False, timeout=30) as resp:
                 if resp.status == 200:
                     image_bytes = await resp.read()
                     with open(thumb_path, "wb") as f:
@@ -146,7 +176,7 @@ async def handle_set_thumbnail_url(message: Message, db_session: AsyncSession):
                     if thumb_id_path.exists():
                         thumb_id_path.unlink()
                         
-                    logger.info(f"Custom video thumbnail updated by Admin (User ID: {message.from_user.id}) via URL: {args}")
+                    logger.info(f"Custom video thumbnail updated by Admin (User ID: {message.from_user.id}) via URL: {target_url}")
                     await status_msg.edit_text("✅ تم تحميل وتحديث الصورة المصغرة الافتراضية للفيديوهات بنجاح.")
                 else:
                     await status_msg.edit_text(f"❌ فشل تحميل الصورة، رمز استجابة السيرفر: {resp.status}")

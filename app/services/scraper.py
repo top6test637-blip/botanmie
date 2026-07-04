@@ -415,7 +415,30 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
     }
 
 async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, referer: Optional[str] = None) -> Optional[str]:
-    """Resolves and extracts .m3u8 master playlist using custom player unpacker."""
+    """Resolves and extracts .m3u8 master playlist or direct video file using custom player unpacker."""
+    if "videa.hu" in embed_url or "videa" in embed_url:
+        try:
+            logger.info(f"Resolving videa.hu embed: {embed_url}")
+            headers = get_browser_headers(embed_url)
+            async with session.get(embed_url, headers=headers, ssl=False, timeout=10) as response:
+                if response.status == 200:
+                    text = await response.text()
+                    text = text.replace("\\/", "/")
+                    mp4_match = re.search(r'(?:"file"|src)\s*:\s*["\'](https?://[^"\']+\.mp4[^"\']*)["\']', text, re.IGNORECASE)
+                    if not mp4_match:
+                        mp4_match = re.search(r'(?:"file"|src)\s*:\s*["\'](https?://[^"\']+)["\']', text, re.IGNORECASE)
+                    if not mp4_match:
+                        mp4_match = re.search(r'<source\s+[^>]*src=["\'](https?://[^"\']+)["\']', text, re.IGNORECASE)
+                    if mp4_match:
+                        mp4_url = mp4_match.group(1)
+                        import html as html_lib
+                        mp4_url = html_lib.unescape(mp4_url)
+                        logger.info(f"Resolved videa.hu direct stream: {mp4_url}")
+                        return mp4_url
+        except Exception as e:
+            logger.warning(f"Failed to resolve videa.hu: {e}")
+        return None
+
     if "yonaplay.net" in embed_url:
         try:
             # yonaplay requires the exact play_url as referer
@@ -588,7 +611,7 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
             
             for idx, (res, conf) in enumerate(zip(resources, configs)):
                 s_name = server_names[idx] if idx < len(server_names) else ""
-                if "streamwish" in s_name or "hglink" in s_name or "mp4upload" in s_name or "yona" in s_name:
+                if "streamwish" in s_name or "hglink" in s_name or "mp4upload" in s_name or "yona" in s_name or "videa" in s_name:
                     priority_indices.append(idx)
                 else:
                     other_indices.append(idx)
