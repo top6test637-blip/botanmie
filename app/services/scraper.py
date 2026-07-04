@@ -505,7 +505,7 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
             pass
             
     # Handle Streamwish/Hlswish mirrors (which change domains frequently)
-    wish_domains = ["streamwish", "hlswish", "stwish", "ninjastr", "awish", "wishembed", "wishfast", "closwish"]
+    wish_domains = ["streamwish", "hlswish", "stwish", "ninjastr", "awish", "wishembed", "wishfast", "closwish", "cybervynx", "swdyu", "flaswish", "sfastwish", "obeywish", "jodwish", "embedwish", "cdnwish", "strwish"]
     if any(d in embed_url for d in wish_domains):
         video_id = None
         for path_prefix in ["/e/", "/watch/", "/embed/"]:
@@ -519,12 +519,16 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
             # We construct fallback URLs using multiple known active domains
             target_urls = [
                 f"https://hlswish.com/e/{video_id}",
-                f"https://stwish.xyz/e/{video_id}",
-                f"https://stwish.to/e/{video_id}",
+                f"https://swdyu.com/e/{video_id}",
+                f"https://flaswish.com/e/{video_id}",
+                f"https://sfastwish.com/e/{video_id}",
+                f"https://obeywish.com/e/{video_id}",
+                f"https://jodwish.com/e/{video_id}",
+                f"https://embedwish.com/e/{video_id}",
+                f"https://cdnwish.com/e/{video_id}",
+                f"https://strwish.xyz/e/{video_id}",
                 f"https://awish.pro/e/{video_id}",
-                f"https://wishembed.co/e/{video_id}",
                 f"https://streamwish.to/e/{video_id}",
-                f"https://closwish.com/e/{video_id}",
                 embed_url # Include original as fallback
             ]
         
