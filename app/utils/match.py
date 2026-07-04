@@ -30,3 +30,22 @@ def get_best_slug_match(scraper_results, search_title: str) -> str:
             
     # 4. Fallback to first result
     return scraper_results[0]["slug"]
+
+
+def sanitize_search_query(title: str) -> str:
+    """Cleans the anime title by removing subtitles, special characters, and bullets."""
+    if not title:
+        return ""
+    
+    # Split by colons (:) or dashes ( - ) and take only the first part
+    for splitter in [":", " - "]:
+        if splitter in title:
+            title = title.split(splitter)[0]
+            
+    # Remove special bullets like ● and symbols, punctuation
+    import re
+    title = re.sub(r"[●⚫⚪■□◆◇▲▼★☆✦✧♦♣♠♥🃏#@$^*&_+|~`{}[\];\"'<>]", " ", title)
+    
+    # Replace multiple spaces with a single space
+    title = " ".join(title.split())
+    return title.strip()
