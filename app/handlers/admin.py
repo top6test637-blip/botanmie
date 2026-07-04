@@ -111,8 +111,29 @@ async def handle_custom_thumbnail(message: Message, db_session: AsyncSession):
         file_info = await bot.get_file(photo.file_id)
         file_path = file_info.file_path
         
+        # Clean local Bot API server path to extract relative path for api.telegram.org
+        cleaned_path = file_path
+        prefix = f"bot{bot.token}/"
+        if prefix in cleaned_path:
+            cleaned_path = cleaned_path.split(prefix, 1)[1]
+        elif "/var/lib/telegram-bot-api/" in cleaned_path:
+            import re
+            match = re.search(r'bot[^/]+/(.+)$', cleaned_path)
+            if match:
+                cleaned_path = match.group(1)
+        if "/" in cleaned_path:
+            import re
+            match = re.search(r'bot[^/]+/(.+)$', cleaned_path)
+            if match:
+                cleaned_path = match.group(1)
+            else:
+                cleaned_path = cleaned_path.lstrip("/")
+                parts = cleaned_path.replace("\\", "/").split("/")
+                if len(parts) >= 2:
+                    cleaned_path = f"{parts[-2]}/{parts[-1]}"
+                    
         # Download from official Telegram cloud API directly via aiohttp
-        download_url = f"https://api.telegram.org/file/bot{bot.token}/{file_path}"
+        download_url = f"https://api.telegram.org/file/bot{bot.token}/{cleaned_path}"
         import aiohttp
         async with aiohttp.ClientSession() as session:
             async with session.get(download_url, ssl=False, timeout=30) as resp:

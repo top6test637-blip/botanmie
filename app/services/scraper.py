@@ -316,14 +316,25 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
                     if story_el:
                         description = story_el.text.strip()
                         
-                    # 3. Parse duration
-                    duration_el = soup.find(lambda tag: tag.name == "div" and "مدة الحلقة:" in tag.text)
-                    if duration_el:
-                        duration = duration_el.text.replace("مدة الحلقة:", "").strip()
-                    else:
-                        match_dur = re.search(r'<span>مدة الحلقة:</span>\s*([^<]+)', html)
+                    # 3. Parse duration safely and defensively
+                    duration_val = None
+                    span_el = soup.find(lambda tag: tag.name == "span" and "مدة الحلقة" in tag.text)
+                    if span_el:
+                        parent = span_el.parent
+                        if parent:
+                            duration_val = parent.text.replace(span_el.text, "").replace(":", "").strip()
+                    if not duration_val:
+                        match_dur = re.search(r'<span>مدة الحلقة:</span>\s*([^<\n]+)', html)
                         if match_dur:
-                            duration = match_dur.group(1).strip()
+                            duration_val = match_dur.group(1).strip()
+                    if not duration_val:
+                        div_el = soup.find(lambda tag: tag.name == "div" and "مدة الحلقة:" in tag.text)
+                        if div_el and len(div_el.text) < 150:
+                            duration_val = div_el.text.replace("مدة الحلقة:", "").strip()
+                            
+                    if duration_val:
+                        duration_val = " ".join(duration_val.split())
+                        duration = duration_val[:90]
                 except Exception as ex:
                     logger.warning(f"Failed to parse anime page metadata: {ex}")
 

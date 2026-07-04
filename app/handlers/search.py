@@ -100,7 +100,7 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
                     title_romaji=anime["title_romaji"],
                     description=anime["description"],
                     image_url=anime["image_url"],
-                    duration=anime.get("duration")
+                    duration=anime.get("duration")[:90] if anime.get("duration") else None
                 )
                 db_session.add(new_cache)
             await db_session.commit()
