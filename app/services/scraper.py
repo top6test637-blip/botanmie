@@ -109,7 +109,7 @@ async def get_html(url: str, session: aiohttp.ClientSession) -> str:
         logger.info(f"Proxy used for request: {config.PROXY_URL}")
         
     try:
-        async with session.get(url, headers=headers, timeout=15) as response:
+        async with session.get(url, headers=headers, ssl=False, timeout=15) as response:
             if response.status == 200:
                 return await response.text()
             raise ScraperError(f"HTTP error {response.status} fetching {url}")
@@ -123,7 +123,7 @@ async def resolve_anime_info(ep_url: str, session: aiohttp.ClientSession) -> Opt
     """Resolves parent anime details page from an episode watch page URL."""
     headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
     try:
-        async with session.get(ep_url, headers=headers, timeout=10) as resp:
+        async with session.get(ep_url, headers=headers, ssl=False, timeout=10) as resp:
             if resp.status == 200:
                 text = await resp.text()
                 match = re.search(r'href="https://[^/]+/anime/([^/"]+)/"', text)
@@ -148,7 +148,7 @@ async def parse_m3u8_qualities(master_url: str, session: aiohttp.ClientSession) 
         
     qualities = {}
     try:
-        async with session.get(master_url, headers=headers, timeout=10) as response:
+        async with session.get(master_url, headers=headers, ssl=False, timeout=10) as response:
             if response.status != 200:
                 logger.error(f"Error in process: master playlist returned status {response.status}")
                 return {}
@@ -323,22 +323,59 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession) ->
     """Resolves and extracts .m3u8 master playlist using custom player unpacker."""
     headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
     
-    # Try multiple known mirror player domains if it's hglink.to
+    # Try multiple known mirror player domains if it's hglink.to or Streamwish
     target_urls = [embed_url]
     if "hglink.to" in embed_url:
-        video_id = embed_url.split("/e/")[1].strip("/")
-        target_urls = [
-            f"https://hanerix.com/e/{video_id}",
-            f"https://masukestin.com/e/{video_id}"
-        ]
+        try:
+            video_id = embed_url.split("/e/")[1].strip("/")
+            target_urls = [
+                f"https://hanerix.com/e/{video_id}",
+                f"https://masukestin.com/e/{video_id}",
+                f"https://hglink.to/e/{video_id}"
+            ]
+        except Exception:
+            pass
+            
+    # Handle Streamwish/Hlswish mirrors (which change domains frequently)
+    wish_domains = ["streamwish", "hlswish", "stwish", "ninjastr", "awish", "wishembed", "wishfast", "closwish"]
+    if any(d in embed_url for d in wish_domains):
+        video_id = None
+        for path_prefix in ["/e/", "/watch/", "/embed/"]:
+            if path_prefix in embed_url:
+                try:
+                    video_id = embed_url.split(path_prefix)[1].split("?")[0].strip("/")
+                    break
+                except Exception:
+                    pass
+        if video_id:
+            # We construct fallback URLs using multiple known active domains
+            target_urls = [
+                f"https://hlswish.com/e/{video_id}",
+                f"https://stwish.xyz/e/{video_id}",
+                f"https://stwish.to/e/{video_id}",
+                f"https://awish.pro/e/{video_id}",
+                f"https://wishembed.co/e/{video_id}",
+                f"https://streamwish.to/e/{video_id}",
+                f"https://closwish.com/e/{video_id}",
+                embed_url # Include original as fallback
+            ]
         
     for url in target_urls:
         logger.info(f"Attempting to resolve embed playlist from: {url}")
         try:
-            async with session.get(url, headers=headers, timeout=10) as response:
+            async with session.get(url, headers=headers, ssl=False, timeout=10) as response:
                 if response.status != 200:
                     continue
                 text = await response.text()
+                
+                # Check for direct mp4 match first
+                mp4_match = re.search(r'src\s*:\s*["\'](https?://[^"\']+\.mp4[^"\']*)["\']', text)
+                if not mp4_match:
+                    mp4_match = re.search(r'["\']?file["\']?\s*:\s*["\'](https?://[^"\']+\.mp4[^"\']*)["\']', text)
+                if mp4_match:
+                    mp4_url = mp4_match.group(1)
+                    logger.info(f"Resolved direct MP4 stream: {mp4_url}")
+                    return mp4_url
                 
                 # Check if page is Dean Edwards packed
                 script_match = re.search(r"eval\(function\(p,a,c,k,e,d\).*?\.split\(['\"]\|['\"]\)\)\)", text, re.DOTALL)
@@ -404,7 +441,7 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
             
             for idx, (res, conf) in enumerate(zip(resources, configs)):
                 s_name = server_names[idx] if idx < len(server_names) else ""
-                if "streamwish" in s_name or "hglink" in s_name:
+                if "streamwish" in s_name or "hglink" in s_name or "mp4upload" in s_name:
                     priority_indices.append(idx)
                 else:
                     other_indices.append(idx)
@@ -416,13 +453,17 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
                 if embed_url:
                     m3u8_master = await get_m3u8_from_embed(embed_url, session)
                     if m3u8_master:
-                        qualities = await parse_m3u8_qualities(m3u8_master, session)
-                        resolved_links.update(qualities)
+                        if ".m3u8" in m3u8_master:
+                            qualities = await parse_m3u8_qualities(m3u8_master, session)
+                            resolved_links.update(qualities)
+                        else:
+                            # Direct MP4 file link resolved from mirror!
+                            resolved_links["480p"] = m3u8_master
                         if resolved_links:
                             break  # Found working qualities, skip rest
                             
             if not resolved_links:
-                raise ScraperError("Failed to parse any working HLS streams from embed servers")
+                raise ScraperError("Failed to parse any working HLS streams or direct video files from embed servers")
                 
             logger.info(f"Resolved {len(resolved_links)} download link qualities: {list(resolved_links.keys())}")
             return resolved_links

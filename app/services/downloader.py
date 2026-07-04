@@ -51,7 +51,7 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
         headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
         try:
             logger.info(f"Estimating HLS stream size for playlist: {url}")
-            async with session.get(url, headers=headers, timeout=10) as resp:
+            async with session.get(url, headers=headers, ssl=False, timeout=10) as resp:
                 if resp.status == 200:
                     data = await resp.read()
                     if data.startswith(b"\x89PNG"):
@@ -68,7 +68,7 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
                                 break
                                 
                         if playlist_url != url:
-                            async with session.get(playlist_url, headers=headers, timeout=10) as sub_resp:
+                            async with session.get(playlist_url, headers=headers, ssl=False, timeout=10) as sub_resp:
                                 if sub_resp.status == 200:
                                     sub_data = await sub_resp.read()
                                     if sub_data.startswith(b"\x89PNG"):
@@ -79,7 +79,7 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
                     segment_urls = [urljoin(playlist_url, l.strip()) for l in lines if l.strip() and not l.startswith("#")]
                     if segment_urls:
                         first_seg_url = segment_urls[0]
-                        async with session.get(first_seg_url, headers=headers, timeout=10) as seg_resp:
+                        async with session.get(first_seg_url, headers=headers, ssl=False, timeout=10) as seg_resp:
                             if seg_resp.status == 200:
                                 length = seg_resp.headers.get("Content-Length")
                                 if length:
@@ -95,13 +95,13 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
 
     headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
     try:
-        async with session.head(url, headers=headers, allow_redirects=True, timeout=10) as response:
+        async with session.head(url, headers=headers, allow_redirects=True, ssl=False, timeout=10) as response:
             if response.status == 200:
                 length = response.headers.get("Content-Length")
                 if length:
                     return int(length)
                     
-        async with session.get(url, headers=headers, allow_redirects=True, timeout=10) as response:
+        async with session.get(url, headers=headers, allow_redirects=True, ssl=False, timeout=10) as response:
             length = response.headers.get("Content-Length")
             if length:
                 return int(length)
@@ -152,7 +152,7 @@ async def download_segment(
     async with semaphore:
         for attempt in range(3):
             try:
-                async with session.get(seg_url, headers=headers, timeout=20) as resp:
+                async with session.get(seg_url, headers=headers, ssl=False, timeout=20) as resp:
                     if resp.status == 200:
                         seg_data = await resp.read()
                         if is_png_wrapped and seg_data.startswith(b"\x89PNG"):
@@ -181,7 +181,7 @@ async def download_hls(
     try:
         async with aiohttp.ClientSession(connector=connector) as session:
             logger.info(f"Fetching HLS playlist: {m3u8_url}")
-            async with session.get(m3u8_url, headers=headers, timeout=15) as resp:
+            async with session.get(m3u8_url, headers=headers, ssl=False, timeout=15) as resp:
                 if resp.status != 200:
                     logger.error(f"Error in process: failed to fetch playlist {m3u8_url}, status {resp.status}")
                     return False
@@ -207,7 +207,7 @@ async def download_hls(
             is_png_wrapped = False
             
             try:
-                async with session.get(first_seg_url, headers=headers, timeout=10) as get_resp:
+                async with session.get(first_seg_url, headers=headers, ssl=False, timeout=10) as get_resp:
                     if get_resp.status == 200:
                         size_header = get_resp.headers.get("Content-Length")
                         if size_header:
@@ -313,7 +313,7 @@ async def download_file(
     
     try:
         async with aiohttp.ClientSession(connector=connector) as session:
-            async with session.get(url, headers=headers, timeout=120) as response:
+            async with session.get(url, headers=headers, ssl=False, timeout=120) as response:
                 if response.status != 200:
                     logger.error(f"Error in process: standard download returned status {response.status}")
                     return False

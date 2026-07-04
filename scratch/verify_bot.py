@@ -24,7 +24,7 @@ print(f"Testing with PROXY_URL from .env: {config.PROXY_URL}")
 from app.database.connection import init_db, AsyncSessionLocal
 from app.database.models import BotAdmin
 from app.utils.auth import is_admin
-from app.services.scraper import get_episodes_scraper
+from app.services.scraper import get_episodes_scraper, get_m3u8_from_embed
 from app.services.anilist import search_anilist, translate_to_english
 from app.utils.match import get_best_slug_match
 
@@ -116,6 +116,19 @@ async def test_slug_matching():
     best_slug = get_best_slug_match(scraper_results, search_title)
     print(f"Search Title: '{search_title}' -> Best Slug Match: '{best_slug}' (Expected: 'hunter-x-hunter-2011')")
 
+async def test_mp4_resolution():
+    print("\n--- TESTING MP4 DIRECT STREAM RESOLUTION ---")
+    url = "https://www.mp4upload.com/embed-g1hz8dzxk3em.html"
+    import aiohttp
+    async with aiohttp.ClientSession() as session:
+        print(f"Resolving {url}...")
+        resolved = await get_m3u8_from_embed(url, session)
+        print(f"Resolved Direct Link: {resolved}")
+        if resolved and resolved.endswith(".mp4"):
+            print("Successfully resolved direct MP4 video link! (Expected: *.mp4)")
+        else:
+            print("Failed to resolve direct MP4 video link.")
+
 async def test_scraper():
     print("\n--- TESTING PAGINATED EPISODES SCRAPER ---")
     slug = "one-piece"
@@ -131,6 +144,7 @@ async def main():
         await test_database()
         await test_translation()
         await test_slug_matching()
+        await test_mp4_resolution()
         await test_scraper()
         print("\nVerification completed successfully!")
     except Exception as e:

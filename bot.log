@@ -390,3 +390,274 @@ UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb0 in position 6: invalid 
 [2026-07-04 03:30:10] [INFO] [bot] [scraper.py:309]: تم جلب 1189 حلقة جديدة من الصفحة 1
 [2026-07-04 03:30:10] [INFO] [bot] [scraper.py:306]: لم يتم العثور على حلقات جديدة في الصفحة 2. إيقاف جلب الصفحات.
 [2026-07-04 03:30:10] [INFO] [bot] [scraper.py:319]: إجمالي الحلقات المستخرجة للأنمي one-piece: 1189
+[2026-07-04 03:33:13] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 03:33:14] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 03:33:14] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 03:33:14] [INFO] [bot] [anilist.py:93]: Starting search on AniList for query: Hunter x Hunter (original: هنتر اكس هنتر)
+[2026-07-04 03:33:14] [INFO] [bot] [anilist.py:110]: Scraping page: https://graphql.anilist.co (Direct Media Query)
+[2026-07-04 03:33:15] [INFO] [bot] [anilist.py:155]: AniList search returned 9 normalized titles.
+[2026-07-04 03:33:15] [INFO] [bot] [scraper.py:364]: Attempting to resolve embed playlist from: https://hlswish.com/e/9B6Z4DBB3ZJGj
+[2026-07-04 03:33:15] [INFO] [bot] [scraper.py:364]: Attempting to resolve embed playlist from: https://stwish.xyz/e/9B6Z4DBB3ZJGj
+[2026-07-04 03:33:15] [ERROR] [bot] [scraper.py:392]: Error in process while resolving mirror embed URL https://stwish.xyz/e/9B6Z4DBB3ZJGj
+Traceback (most recent call last):
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1571, in _create_direct_connection
+    hosts = await self._resolve_host(host, port, traces=traces)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1181, in _resolve_host
+    return await asyncio.shield(resolved_host_task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1212, in _resolve_host_with_throttle
+    addrs = await self._resolver.resolve(host, port, family=self._family)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\resolver.py", line 40, in resolve
+    infos = await self._loop.getaddrinfo(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\asyncio\base_events.py", line 868, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\socket.py", line 974, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "c:\Users\monsm\OneDrive\Desktop\BOT\app\services\scraper.py", line 366, in get_m3u8_from_embed
+    async with session.get(url, headers=headers, timeout=10) as response:
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 810, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 657, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1242, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1577, in _create_direct_connection
+    raise ClientConnectorDNSError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorDNSError: Cannot connect to host stwish.xyz:443 ssl:default [getaddrinfo failed]
+[2026-07-04 03:33:15] [INFO] [bot] [scraper.py:364]: Attempting to resolve embed playlist from: https://stwish.to/e/9B6Z4DBB3ZJGj
+[2026-07-04 03:33:15] [ERROR] [bot] [scraper.py:392]: Error in process while resolving mirror embed URL https://stwish.to/e/9B6Z4DBB3ZJGj
+Traceback (most recent call last):
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1571, in _create_direct_connection
+    hosts = await self._resolve_host(host, port, traces=traces)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1181, in _resolve_host
+    return await asyncio.shield(resolved_host_task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1212, in _resolve_host_with_throttle
+    addrs = await self._resolver.resolve(host, port, family=self._family)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\resolver.py", line 40, in resolve
+    infos = await self._loop.getaddrinfo(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\asyncio\base_events.py", line 868, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\socket.py", line 974, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "c:\Users\monsm\OneDrive\Desktop\BOT\app\services\scraper.py", line 366, in get_m3u8_from_embed
+    async with session.get(url, headers=headers, timeout=10) as response:
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 810, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 657, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1242, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1577, in _create_direct_connection
+    raise ClientConnectorDNSError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorDNSError: Cannot connect to host stwish.to:443 ssl:default [getaddrinfo failed]
+[2026-07-04 03:33:15] [INFO] [bot] [scraper.py:364]: Attempting to resolve embed playlist from: https://awish.pro/e/9B6Z4DBB3ZJGj
+[2026-07-04 03:33:17] [INFO] [bot] [scraper.py:364]: Attempting to resolve embed playlist from: https://wishembed.co/e/9B6Z4DBB3ZJGj
+[2026-07-04 03:33:17] [ERROR] [bot] [scraper.py:392]: Error in process while resolving mirror embed URL https://wishembed.co/e/9B6Z4DBB3ZJGj
+Traceback (most recent call last):
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1571, in _create_direct_connection
+    hosts = await self._resolve_host(host, port, traces=traces)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1181, in _resolve_host
+    return await asyncio.shield(resolved_host_task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1212, in _resolve_host_with_throttle
+    addrs = await self._resolver.resolve(host, port, family=self._family)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\resolver.py", line 40, in resolve
+    infos = await self._loop.getaddrinfo(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\asyncio\base_events.py", line 868, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\socket.py", line 974, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "c:\Users\monsm\OneDrive\Desktop\BOT\app\services\scraper.py", line 366, in get_m3u8_from_embed
+    async with session.get(url, headers=headers, timeout=10) as response:
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 810, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 657, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1242, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1577, in _create_direct_connection
+    raise ClientConnectorDNSError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorDNSError: Cannot connect to host wishembed.co:443 ssl:default [getaddrinfo failed]
+[2026-07-04 03:33:17] [INFO] [bot] [scraper.py:364]: Attempting to resolve embed playlist from: https://streamwish.to/e/9B6Z4DBB3ZJGj
+[2026-07-04 03:33:18] [INFO] [bot] [scraper.py:364]: Attempting to resolve embed playlist from: https://closwish.com/e/9B6Z4DBB3ZJGj
+[2026-07-04 03:33:18] [ERROR] [bot] [scraper.py:392]: Error in process while resolving mirror embed URL https://closwish.com/e/9B6Z4DBB3ZJGj
+Traceback (most recent call last):
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1571, in _create_direct_connection
+    hosts = await self._resolve_host(host, port, traces=traces)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1181, in _resolve_host
+    return await asyncio.shield(resolved_host_task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1212, in _resolve_host_with_throttle
+    addrs = await self._resolver.resolve(host, port, family=self._family)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\resolver.py", line 40, in resolve
+    infos = await self._loop.getaddrinfo(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\asyncio\base_events.py", line 868, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\socket.py", line 974, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "c:\Users\monsm\OneDrive\Desktop\BOT\app\services\scraper.py", line 366, in get_m3u8_from_embed
+    async with session.get(url, headers=headers, timeout=10) as response:
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 810, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 657, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1242, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1577, in _create_direct_connection
+    raise ClientConnectorDNSError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorDNSError: Cannot connect to host closwish.com:443 ssl:default [getaddrinfo failed]
+[2026-07-04 03:33:18] [INFO] [bot] [scraper.py:364]: Attempting to resolve embed playlist from: https://ninjastr.to/watch/9B6Z4DBB3ZJGj
+[2026-07-04 03:33:18] [ERROR] [bot] [scraper.py:392]: Error in process while resolving mirror embed URL https://ninjastr.to/watch/9B6Z4DBB3ZJGj
+Traceback (most recent call last):
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1571, in _create_direct_connection
+    hosts = await self._resolve_host(host, port, traces=traces)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1181, in _resolve_host
+    return await asyncio.shield(resolved_host_task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1212, in _resolve_host_with_throttle
+    addrs = await self._resolver.resolve(host, port, family=self._family)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\resolver.py", line 40, in resolve
+    infos = await self._loop.getaddrinfo(
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\asyncio\base_events.py", line 868, in getaddrinfo
+    return await self.run_in_executor(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\AppData\Roaming\uv\python\cpython-3.11-windows-x86_64-none\Lib\socket.py", line 974, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno 11001] getaddrinfo failed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "c:\Users\monsm\OneDrive\Desktop\BOT\app\services\scraper.py", line 366, in get_m3u8_from_embed
+    async with session.get(url, headers=headers, timeout=10) as response:
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 810, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 657, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1242, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1577, in _create_direct_connection
+    raise ClientConnectorDNSError(req.connection_key, exc) from exc
+aiohttp.client_exceptions.ClientConnectorDNSError: Cannot connect to host ninjastr.to:443 ssl:default [getaddrinfo failed]
+[2026-07-04 03:33:18] [INFO] [bot] [scraper.py:245]: جاري جلب قائمة الحلقات للأنمي: one-piece
+[2026-07-04 03:33:20] [INFO] [bot] [scraper.py:309]: تم جلب 1189 حلقة جديدة من الصفحة 1
+[2026-07-04 03:33:21] [INFO] [bot] [scraper.py:306]: لم يتم العثور على حلقات جديدة في الصفحة 2. إيقاف جلب الصفحات.
+[2026-07-04 03:33:21] [INFO] [bot] [scraper.py:319]: إجمالي الحلقات المستخرجة للأنمي one-piece: 1189
+[2026-07-04 03:35:42] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 03:41:35] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 03:41:36] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 03:41:36] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 03:41:36] [INFO] [bot] [anilist.py:93]: Starting search on AniList for query: Hunter x Hunter (original: هنتر اكس هنتر)
+[2026-07-04 03:41:36] [INFO] [bot] [anilist.py:110]: Scraping page: https://graphql.anilist.co (Direct Media Query)
+[2026-07-04 03:41:37] [INFO] [bot] [anilist.py:155]: AniList search returned 9 normalized titles.
+[2026-07-04 03:41:37] [INFO] [bot] [scraper.py:364]: Attempting to resolve embed playlist from: https://www.mp4upload.com/embed-g1hz8dzxk3em.html
+[2026-07-04 03:41:37] [INFO] [bot] [scraper.py:377]: Resolved direct MP4 stream: https://a3.mp4upload.com:183/d/xsx77cwkz3b4quuol2xr2y2ilov55kfhnj5rh5vuuefuqvdsiypwdrhvxiemz3jueb2uvzs3/video.mp4
+[2026-07-04 03:41:37] [INFO] [bot] [scraper.py:245]: جاري جلب قائمة الحلقات للأنمي: one-piece
+[2026-07-04 03:41:39] [INFO] [bot] [scraper.py:309]: تم جلب 1189 حلقة جديدة من الصفحة 1
+[2026-07-04 03:41:40] [INFO] [bot] [scraper.py:306]: لم يتم العثور على حلقات جديدة في الصفحة 2. إيقاف جلب الصفحات.
+[2026-07-04 03:41:40] [INFO] [bot] [scraper.py:319]: إجمالي الحلقات المستخرجة للأنمي one-piece: 1189
