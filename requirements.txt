@@ -6,3 +6,4 @@ SQLAlchemy[asyncio]>=2.0.31
 asyncpg>=0.29.0
 aiosqlite>=0.20.0
 python-dotenv>=1.0.1
+brotli>=1.1.0

@@ -120,7 +120,7 @@ def get_browser_headers(referer: str = "https://witanime.pics/") -> dict:
         "Referer": referer,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
         "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Encoding": "gzip, deflate",
         "Connection": "keep-alive",
         "Upgrade-Insecure-Requests": "1",
         "Sec-Fetch-Dest": "document",
