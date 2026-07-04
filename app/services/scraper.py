@@ -323,8 +323,52 @@ async def get_episodes_scraper(anime_slug: str) -> List[Dict[str, Any]]:
     logger.info(f"إجمالي الحلقات المستخرجة للأنمي {anime_slug}: {len(episodes)}")
     return episodes
 
-async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession) -> Optional[str]:
+async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, referer: Optional[str] = None) -> Optional[str]:
     """Resolves and extracts .m3u8 master playlist using custom player unpacker."""
+    if "yonaplay.net" in embed_url:
+        try:
+            # yonaplay requires the exact play_url as referer
+            ref = referer or "https://witanime.pics/"
+            headers = {"User-Agent": get_random_user_agent(), "Referer": ref}
+            logger.info(f"Resolving yonaplay aggregator from: {embed_url} with referer: {ref}")
+            
+            async with session.get(embed_url, headers=headers, ssl=False, timeout=10) as resp:
+                if resp.status == 200:
+                    html = await resp.text()
+                    # Find all go_to_player('...') Base64 strings
+                    b64_matches = re.findall(r"go_to_player\(['\"]([a-zA-Z0-9+/=]+)['\"]\)", html)
+                    logger.info(f"yonaplay found {len(b64_matches)} player options")
+                    
+                    for b64_str in b64_matches:
+                        try:
+                            decoded_url = base64.b64decode(b64_str).decode("utf-8")
+                            logger.info(f"Decoded yonaplay player option: {decoded_url}")
+                            
+                            # Prioritize dotplay.net
+                            if "dotplay.net" in decoded_url:
+                                match_code = re.search(r"/embed/([a-zA-Z0-9]+)", decoded_url)
+                                if match_code:
+                                    code = match_code.group(1)
+                                    api_url = f"https://dotplay.net/api.php?code={code}"
+                                    api_headers = {
+                                        "User-Agent": get_random_user_agent(),
+                                        "Referer": decoded_url,
+                                        "Accept": "application/json"
+                                    }
+                                    logger.info(f"Calling dotplay API: {api_url}")
+                                    async with session.get(api_url, headers=api_headers, ssl=False, timeout=10) as api_resp:
+                                        if api_resp.status == 200:
+                                            data = await api_resp.json()
+                                            if data.get("success") and data.get("video_url"):
+                                                dec_url = base64.b64decode(data["video_url"]).decode("utf-8").split("|")[0]
+                                                logger.info(f"Resolved video URL from dotplay: {dec_url}")
+                                                return dec_url
+                        except Exception as e:
+                            logger.warning(f"Failed to resolve yonaplay option {b64_str}: {e}")
+        except Exception as e:
+            logger.exception(f"Error resolving yonaplay: {e}")
+        return None
+
     headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
     
     # Try multiple known mirror player domains if it's hglink.to or Streamwish
@@ -445,7 +489,7 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
             
             for idx, (res, conf) in enumerate(zip(resources, configs)):
                 s_name = server_names[idx] if idx < len(server_names) else ""
-                if "streamwish" in s_name or "hglink" in s_name or "mp4upload" in s_name:
+                if "streamwish" in s_name or "hglink" in s_name or "mp4upload" in s_name or "yona" in s_name:
                     priority_indices.append(idx)
                 else:
                     other_indices.append(idx)
@@ -455,7 +499,7 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
                 conf = configs[idx]
                 embed_url = decrypt_resource(res, conf)
                 if embed_url:
-                    m3u8_master = await get_m3u8_from_embed(embed_url, session)
+                    m3u8_master = await get_m3u8_from_embed(embed_url, session, referer=play_url)
                     if m3u8_master:
                         if ".m3u8" in m3u8_master:
                             qualities = await parse_m3u8_qualities(m3u8_master, session)
