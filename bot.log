@@ -682,3 +682,43 @@ aiohttp.client_exceptions.ClientConnectorDNSError: Cannot connect to host ninjas
 [2026-07-04 03:50:54] [INFO] [bot] [scraper.py:364]: Attempting to resolve embed playlist from: https://www.mp4upload.com/embed-g1hz8dzxk3em.html
 [2026-07-04 03:50:55] [INFO] [bot] [scraper.py:377]: Resolved direct MP4 stream: https://a3.mp4upload.com:183/d/xsx77cwkz3b4quuol2xr2y2ilov55kfhnj5rh5vuuefuqvdsi3yi4hxln3zcckjwx3vtyjrp/video.mp4
 [2026-07-04 03:50:55] [INFO] [bot] [downloader.py:475]: تقدم التحميل: 0.8% - 0.0/2.0 ميجابايت - السرعة: 0.03 ميجابايت/ثانية
+[2026-07-04 03:50:59] [INFO] [bot] [downloader.py:475]: تقدم التحميل: 100.8% - 2.0/2.0 ميجابايت - السرعة: 0.45 ميجابايت/ثانية
+[2026-07-04 03:52:08] [INFO] [bot] [downloader.py:475]: تقدم التحميل: 1320.3% - 26.4/2.0 ميجابايت - السرعة: 0.36 ميجابايت/ثانية
+[2026-07-04 03:52:56] [ERROR] [bot] [downloader.py:484]: Error in process during direct file download from https://a3.mp4upload.com:183/d/xsx77cwkz3b4quuol2xr2y2ilov55kfhnj5rh5vuuefuqvdsi3yi4hxln3zcckjwx3vtyjrp/video.mp4
+Traceback (most recent call last):
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\streams.py", line 365, in _wait
+    await waiter
+asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "c:\Users\monsm\OneDrive\Desktop\BOT\app\services\downloader.py", line 452, in download_file
+    async for chunk in response.content.iter_chunked(chunk_size):
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\streams.py", line 46, in __anext__
+    rv = await self.read_func()
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\streams.py", line 448, in read
+    await self._wait("read")
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\streams.py", line 364, in _wait
+    with self._timer:
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\helpers.py", line 759, in __exit__
+    raise asyncio.TimeoutError from exc_val
+TimeoutError
+[2026-07-04 03:52:56] [INFO] [bot] [scraper.py:245]: جاري جلب قائمة الحلقات للأنمي: one-piece
+[2026-07-04 03:52:58] [INFO] [bot] [scraper.py:309]: تم جلب 1189 حلقة جديدة من الصفحة 1
+[2026-07-04 03:52:59] [INFO] [bot] [scraper.py:306]: لم يتم العثور على حلقات جديدة في الصفحة 2. إيقاف جلب الصفحات.
+[2026-07-04 03:52:59] [INFO] [bot] [scraper.py:319]: إجمالي الحلقات المستخرجة للأنمي one-piece: 1189
+[2026-07-04 03:53:11] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 03:53:14] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 03:53:15] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 03:53:15] [INFO] [bot] [anilist.py:93]: Starting search on AniList for query: Hunter x Hunter (original: هنتر اكس هنتر)
+[2026-07-04 03:53:15] [INFO] [bot] [anilist.py:110]: Scraping page: https://graphql.anilist.co (Direct Media Query)
+[2026-07-04 03:53:15] [INFO] [bot] [anilist.py:155]: AniList search returned 9 normalized titles.
+[2026-07-04 03:53:15] [INFO] [bot] [scraper.py:364]: Attempting to resolve embed playlist from: https://www.mp4upload.com/embed-g1hz8dzxk3em.html
+[2026-07-04 03:53:16] [INFO] [bot] [scraper.py:377]: Resolved direct MP4 stream: https://a3.mp4upload.com:183/d/xsx77cwkz3b4quuol2xr2y2ilov55kfhnj5rh5vuuefuqvdsizc7xcxfv2thblflpdvv2atc/video.mp4
+[2026-07-04 03:53:17] [INFO] [bot] [downloader.py:391]: Merging 4 parts into final file: test_video.mp4
+[2026-07-04 03:53:17] [INFO] [bot] [scraper.py:245]: جاري جلب قائمة الحلقات للأنمي: one-piece
+[2026-07-04 03:53:20] [INFO] [bot] [scraper.py:309]: تم جلب 1189 حلقة جديدة من الصفحة 1
+[2026-07-04 03:53:20] [INFO] [bot] [scraper.py:306]: لم يتم العثور على حلقات جديدة في الصفحة 2. إيقاف جلب الصفحات.
+[2026-07-04 03:53:20] [INFO] [bot] [scraper.py:319]: إجمالي الحلقات المستخرجة للأنمي one-piece: 1189
