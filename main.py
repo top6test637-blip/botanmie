@@ -108,7 +108,12 @@ async def lifespan(app: FastAPI):
         logger.info(f"Setting webhook dynamically to: {webhook_url}")
         await bot.set_webhook(webhook_url, drop_pending_updates=True)
     else:
-        logger.warning("WEBHOOK_URL is not set. Webhook was not registered dynamically.")
+        logger.warning("WEBHOOK_URL is not set. Webhook was not registered dynamically. Falling back to Long Polling in background...")
+        try:
+            await bot.delete_webhook(drop_pending_updates=True)
+        except Exception:
+            logger.exception("Failed to delete webhook on startup")
+        asyncio.create_task(dp.start_polling(bot, handle_signals=False))
 
     # 8. Start Background Async Consumer Loop
     asyncio.create_task(task_consumer_worker(bot, AsyncSessionLocal))
