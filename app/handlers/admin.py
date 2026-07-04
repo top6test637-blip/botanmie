@@ -108,7 +108,29 @@ async def handle_custom_thumbnail(message: Message, db_session: AsyncSession):
     try:
         bot = message.bot
         file_info = await bot.get_file(photo.file_id)
-        await bot.download_file(file_info.file_path, destination=str(thumb_path))
+        
+        # Download from official Telegram servers directly to bypass local Bot API 404 issues
+        import aiohttp
+        public_url = f"https://api.telegram.org/file/bot{bot.token}/{file_info.file_path}"
+        logger.info(f"Downloading custom thumbnail from public Telegram API: {public_url}")
+        
+        success = False
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(public_url, ssl=False, timeout=30) as resp:
+                    if resp.status == 200:
+                        with open(thumb_path, "wb") as f:
+                            f.write(await resp.read())
+                        success = True
+                    else:
+                        logger.warning(f"Public thumbnail download returned status {resp.status}")
+        except Exception as e:
+            logger.warning(f"Failed downloading from public API: {e}")
+            
+        if not success:
+            logger.info("Falling back to standard Bot API download_file method...")
+            await bot.download_file(file_info.file_path, destination=str(thumb_path))
+            
         logger.info(f"Custom video thumbnail updated by Admin (User ID: {message.from_user.id})")
         await message.answer("✅ تم تحديث الصورة المصغرة الافتراضية للفيديوهات بنجاح.")
     except Exception as e:

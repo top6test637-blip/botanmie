@@ -303,7 +303,7 @@ async def download_multipart(
     status_message: Message,
     total_size: int,
     quality: str,
-    num_parts: int = 6
+    num_parts: int = 10
 ) -> bool:
     """Downloads a direct file in parallel parts using HTTP Range requests to maximize speed."""
     connector = get_session_connector(limit=50)
@@ -332,7 +332,8 @@ async def download_multipart(
         
         for attempt in range(3):
             try:
-                async with session.get(url, headers=part_headers, ssl=False, timeout=60) as response:
+                client_timeout = aiohttp.ClientTimeout(total=None, sock_read=60)
+                async with session.get(url, headers=part_headers, ssl=False, timeout=client_timeout) as response:
                     if response.status not in (200, 206):
                         raise Exception(f"Part returned status {response.status}")
                         
@@ -366,8 +367,8 @@ async def download_multipart(
                                 except Exception:
                                     pass
                     return True
-            except Exception as e:
-                logger.warning(f"Error downloading part {part_idx}, attempt {attempt+1}: {e}")
+            except Exception:
+                logger.exception(f"Error downloading part {part_idx}, attempt {attempt+1}")
                 await asyncio.sleep(1)
         return False
 
@@ -443,7 +444,8 @@ async def download_file(
     
     try:
         async with aiohttp.ClientSession(connector=connector) as session:
-            async with session.get(url, headers=headers, ssl=False, timeout=120) as response:
+            client_timeout = aiohttp.ClientTimeout(total=None, sock_read=60)
+            async with session.get(url, headers=headers, ssl=False, timeout=client_timeout) as response:
                 if response.status != 200:
                     logger.error(f"Error in process: standard download returned status {response.status}")
                     return False
