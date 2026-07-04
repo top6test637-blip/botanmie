@@ -802,3 +802,34 @@ TimeoutError
 [2026-07-04 04:37:27] [INFO] [bot] [downloader.py:478]: تقدم التحميل: 12220.3% - 244.4/2.0 ميجابايت - السرعة: 0.27 ميجابايت/ثانية
 [2026-07-04 04:37:47] [INFO] [bot] [downloader.py:478]: تقدم التحميل: 12560.9% - 251.2/2.0 ميجابايت - السرعة: 0.27 ميجابايت/ثانية
 [2026-07-04 04:38:33] [INFO] [bot] [downloader.py:478]: تقدم التحميل: 13360.1% - 267.2/2.0 ميجابايت - السرعة: 0.28 ميجابايت/ثانية
+[2026-07-04 04:38:41] [INFO] [bot] [downloader.py:478]: تقدم التحميل: 13490.6% - 269.8/2.0 ميجابايت - السرعة: 0.28 ميجابايت/ثانية
+[2026-07-04 04:39:48] [INFO] [bot] [downloader.py:478]: تقدم التحميل: 14810.9% - 296.2/2.0 ميجابايت - السرعة: 0.29 ميجابايت/ثانية
+[2026-07-04 04:42:15] [INFO] [bot] [downloader.py:478]: تقدم التحميل: 19730.5% - 394.6/2.0 ميجابايت - السرعة: 0.33 ميجابايت/ثانية
+[2026-07-04 04:43:37] [INFO] [bot] [scraper.py:249]: جاري جلب قائمة الحلقات للأنمي: one-piece
+[2026-07-04 04:43:43] [WARNING] [bot] [scraper.py:274]: فشل الاتصال بالصفحة 1: Cannot connect to host witanime.xyz:443 ssl:default [getaddrinfo failed]
+[2026-07-04 04:43:43] [INFO] [bot] [scraper.py:323]: إجمالي الحلقات المستخرجة للأنمي one-piece: 0
+[2026-07-04 12:52:47] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 13:07:31] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 13:07:58] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 13:13:27] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 13:40:06] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 13:40:09] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 13:40:10] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 13:40:10] [INFO] [bot] [anilist.py:93]: Starting search on AniList for query: Hunter x Hunter (original: هنتر اكس هنتر)
+[2026-07-04 13:40:10] [INFO] [bot] [anilist.py:110]: Scraping page: https://graphql.anilist.co (Direct Media Query)
+[2026-07-04 13:40:10] [INFO] [bot] [anilist.py:155]: AniList search returned 9 normalized titles.
+[2026-07-04 13:40:10] [INFO] [bot] [scraper.py:412]: Attempting to resolve embed playlist from: https://www.mp4upload.com/embed-g1hz8dzxk3em.html
+[2026-07-04 13:40:10] [INFO] [bot] [scraper.py:425]: Resolved direct MP4 stream: https://a3.mp4upload.com:183/d/xsx77cwkz3b4quuol2xr2y2ilov55kfhnj5rh5vuuefuqvdsi3j3zul6ituwbmjedlfnvb5i/video.mp4
+[2026-07-04 13:40:11] [INFO] [bot] [downloader.py:482]: تقدم التحميل: 0.8% - 0.0/2.0 ميجابايت - السرعة: 0.02 ميجابايت/ثانية
+[2026-07-04 13:40:52] [INFO] [bot] [downloader.py:482]: تقدم التحميل: 1520.3% - 30.4/2.0 ميجابايت - السرعة: 0.74 ميجابايت/ثانية
+[2026-07-04 13:43:40] [INFO] [bot] [downloader.py:482]: تقدم التحميل: 8210.9% - 164.2/2.0 ميجابايت - السرعة: 0.78 ميجابايت/ثانية
+[2026-07-04 13:43:44] [INFO] [bot] [downloader.py:482]: تقدم التحميل: 8350.8% - 167.0/2.0 ميجابايت - السرعة: 0.78 ميجابايت/ثانية
+[2026-07-04 14:02:12] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 14:02:15] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 14:02:16] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 14:02:16] [INFO] [bot] [anilist.py:97]: Starting search on AniList for query: Hunter x Hunter (original: هنتر اكس هنتر)
+[2026-07-04 14:02:16] [INFO] [bot] [anilist.py:114]: Scraping page: https://graphql.anilist.co (Direct Media Query)
+[2026-07-04 14:02:16] [INFO] [bot] [anilist.py:159]: AniList search returned 9 normalized titles.
+[2026-07-04 14:02:16] [INFO] [bot] [scraper.py:475]: Attempting to resolve embed playlist from: https://www.mp4upload.com/embed-g1hz8dzxk3em.html
+[2026-07-04 14:02:16] [INFO] [bot] [scraper.py:488]: Resolved direct MP4 stream: https://a3.mp4upload.com:183/d/xsx77cwkz3b4quuol2xr2y2ilov55kfhnj5rh5vuuefuqvdsi2cwtthhovn5pl5kdjphlk23/video.mp4
+[2026-07-04 14:02:17] [INFO] [bot] [downloader.py:483]: تقدم التحميل: 0.8% - 0.0/2.0 ميجابايت - السرعة: 0.03 ميجابايت/ثانية
