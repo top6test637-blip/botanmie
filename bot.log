@@ -380,3 +380,13 @@ UnicodeDecodeError: 'utf-8' codec can't decode byte 0xb0 in position 6: invalid 
 [2026-07-04 03:04:59] [INFO] [bot] [scraper.py:309]: تم جلب 1189 حلقة جديدة من الصفحة 1
 [2026-07-04 03:04:59] [INFO] [bot] [scraper.py:306]: لم يتم العثور على حلقات جديدة في الصفحة 2. إيقاف جلب الصفحات.
 [2026-07-04 03:04:59] [INFO] [bot] [scraper.py:319]: إجمالي الحلقات المستخرجة للأنمي one-piece: 1189
+[2026-07-04 03:30:06] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-04 03:30:07] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 03:30:07] [INFO] [bot] [anilist.py:22]: Translated Arabic query 'هنتر اكس هنتر' to 'Hunter x Hunter' using Google Translate API
+[2026-07-04 03:30:07] [INFO] [bot] [anilist.py:93]: Starting search on AniList for query: Hunter x Hunter (original: هنتر اكس هنتر)
+[2026-07-04 03:30:07] [INFO] [bot] [anilist.py:110]: Scraping page: https://graphql.anilist.co (Direct Media Query)
+[2026-07-04 03:30:08] [INFO] [bot] [anilist.py:155]: AniList search returned 9 normalized titles.
+[2026-07-04 03:30:08] [INFO] [bot] [scraper.py:245]: جاري جلب قائمة الحلقات للأنمي: one-piece
+[2026-07-04 03:30:10] [INFO] [bot] [scraper.py:309]: تم جلب 1189 حلقة جديدة من الصفحة 1
+[2026-07-04 03:30:10] [INFO] [bot] [scraper.py:306]: لم يتم العثور على حلقات جديدة في الصفحة 2. إيقاف جلب الصفحات.
+[2026-07-04 03:30:10] [INFO] [bot] [scraper.py:319]: إجمالي الحلقات المستخرجة للأنمي one-piece: 1189

@@ -23,18 +23,15 @@ AsyncSessionLocal = sessionmaker(
 
 async def init_db():
     """Initializes the database, creating tables if they do not exist."""
+    from sqlalchemy import text
     async with async_engine.begin() as conn:
+        # Drop the old cache tables if they exist to force database schema / constraints update
+        cascade_suffix = "" if is_sqlite else " CASCADE"
+        try:
+            await conn.execute(text(f"DROP TABLE IF EXISTS search_cache{cascade_suffix};"))
+            await conn.execute(text(f"DROP TABLE IF EXISTS episode_cache{cascade_suffix};"))
+            await conn.execute(text(f"DROP TABLE IF EXISTS download_cache{cascade_suffix};"))
+        except Exception as e:
+            print(f"Warning while dropping cache tables: {e}")
         await conn.run_sync(Base.metadata.create_all)
     print("Database tables initialized successfully.")
-    
-    # Clear old legacy caches from previous sessions
-    async with AsyncSessionLocal() as session:
-        try:
-            from sqlalchemy import text
-            await session.execute(text("DELETE FROM search_cache;"))
-            await session.execute(text("DELETE FROM episode_cache;"))
-            await session.execute(text("DELETE FROM download_cache;"))
-            await session.commit()
-            print("Legacy database caches cleared successfully.")
-        except Exception as e:
-            print(f"Error clearing legacy database caches: {e}")
