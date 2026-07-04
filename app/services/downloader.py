@@ -46,15 +46,15 @@ def make_progress_bar(percentage: float, length: int = 10) -> str:
     empty = max(length - filled, 0)
     return "█" * filled + "░" * empty
 
-def get_session_connector(limit: int = 100) -> aiohttp.BaseConnector:
+def get_session_connector(limit: int = 0) -> aiohttp.BaseConnector:
     """Creates a connection-pooled connector with a custom limit."""
     if config.PROXY_URL:
         try:
             from aiohttp_socks import ProxyConnector
-            return ProxyConnector.from_url(config.PROXY_URL, limit=limit)
+            return ProxyConnector.from_url(config.PROXY_URL, limit=limit or 100)
         except Exception:
             logger.exception("Error in process while initializing proxy connector for downloader")
-    return aiohttp.TCPConnector(limit=limit)
+    return aiohttp.TCPConnector(limit=0, limit_per_host=0)
 
 def get_referer_for_url(url: str) -> str:
     """Resolves the best Referer header value to bypass hotlink protection on specific media servers."""
@@ -233,15 +233,21 @@ async def download_hls(
     Downloads HLS playlist concurrently using asyncio.gather (up to 20 parallel connections),
     stripping fake PNG headers, and merging segments. Reuses ClientSession with large connection pooling.
     """
-    connector = get_session_connector(limit=100)
+    connector = get_session_connector(limit=0)
     referer = get_referer_for_url(m3u8_url)
     headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
+    
+    # Keep-alive headers to reuse open network pipes
+    keep_alive_headers = {
+        "Connection": "keep-alive",
+        "Keep-Alive": "timeout=30, max=1000"
+    }
     
     if config.PROXY_URL:
         logger.info(f"Proxy used for request: {config.PROXY_URL}")
         
     try:
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession(connector=connector, headers=keep_alive_headers) as session:
             logger.info(f"Fetching HLS playlist: {m3u8_url}")
             async with session.get(m3u8_url, headers=headers, ssl=False, timeout=15) as resp:
                 if resp.status != 200:
@@ -291,69 +297,36 @@ async def download_hls(
                 for idx, seg_url in enumerate(segment_urls)
             ]
             
+            try:
+                await status_message.edit_text("📥 **جاري تحميل البث (توازي أقصى غير محدود)...**")
+            except Exception:
+                pass
+                
+            start_time = time.time()
+            results = await asyncio.gather(*tasks)
+            elapsed = time.time() - start_time
+            
             downloaded_bytes = 0
             completed_segments = 0
-            start_time = time.time()
-            last_update = 0
-            last_logged_decile = -1
-            
-            buffered_data = {}
-            next_to_write = 0
             
             # Open output file with 1MB buffer size to reduce disk write latency
             with open(target_path, "wb", buffering=1024*1024) as outfile:
-                for future in asyncio.as_completed(tasks):
-                    idx, seg_data = await future
+                for idx, seg_data in sorted(results, key=lambda x: x[0]):
                     if seg_data is None:
                         logger.error(f"Error in process: failed to download segment {idx+1}")
                         return False
-                        
-                    buffered_data[idx] = seg_data
+                    outfile.write(seg_data)
                     downloaded_bytes += len(seg_data)
                     completed_segments += 1
-                    
-                    # Write consecutive downloaded segments to disk sequentially
-                    while next_to_write in buffered_data:
-                        outfile.write(buffered_data[next_to_write])
-                        del buffered_data[next_to_write]
-                        next_to_write += 1
-                        
-                    # Throttle progress messages to every 4 seconds to reduce CPU overhead
-                    now = time.time()
-                    if now - last_update > 4.0 or completed_segments == total_segments:
-                        elapsed = now - start_time
-                        speed = downloaded_bytes / elapsed if elapsed > 0 else 0
-                        percentage = (completed_segments / total_segments) * 100
-                        
-                        # Dynamically self-correct estimated total size based on average downloaded segment size
-                        avg_seg_size = downloaded_bytes / completed_segments
-                        estimated_total_size = avg_seg_size * total_segments
-                        
-                        bar = make_progress_bar(percentage)
-                        speed_mb = speed / (1024 * 1024)
-                        dl_mb = downloaded_bytes / (1024 * 1024)
-                        total_mb = estimated_total_size / (1024 * 1024)
-                        
-                        progress_text = (
-                            f"📥 **جاري تحميل البث (وضع التوازي)...**\n"
-                            f"الجودة: `{quality}`\n"
-                            f"نسبة التقدم: `{percentage:.1f}%` `{bar}` (الجزئية {completed_segments}/{total_segments})\n"
-                            f"الحجم المحمل: `{dl_mb:.1f} ميجابايت` / `{total_mb:.1f} ميجابايت` (تقديري)\n"
-                            f"السرعة: `{speed_mb:.2f} ميجابايت/ثانية`"
-                        )
-                        
-                        current_decile = int(percentage) // 10
-                        if current_decile > last_logged_decile:
-                            logger.info(f"تقدم التحميل: {percentage:.1f}% - {dl_mb:.1f}/{total_mb:.1f} ميجابايت - السرعة: {speed_mb:.2f} ميجابايت/ثانية")
-                            last_logged_decile = current_decile
-                            
-                        try:
-                            await status_message.edit_text(progress_text, parse_mode="Markdown")
-                        except Exception:
-                            pass
-                        last_update = now
-                        
-            logger.info("HLS stream parallel download completed successfully.")
+            
+            speed = downloaded_bytes / elapsed if elapsed > 0 else 0
+            speed_mb = speed / (1024 * 1024)
+            logger.info(f"تم التحميل بنجاح في {elapsed:.1f} ثانية. السرعة الإجمالية: {speed_mb:.2f} ميجابايت/ثانية")
+            
+            try:
+                await status_message.edit_text(f"✅ تم تحميل البث بنجاح!\nالسرعة: `{speed_mb:.2f} ميجابايت/ثانية`")
+            except Exception:
+                pass
             return True
     except Exception:
         logger.exception("Error in process during parallel HLS download")

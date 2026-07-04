@@ -96,6 +96,125 @@ async def task_consumer_worker(bot: Bot, db_session_factory):
             logger.exception("Error in task consumer loop")
             await asyncio.sleep(5)
 
+async def self_heal_episode_cache(
+    anilist_id: int,
+    anime_title: str,
+    episode_num: str,
+    db_session_factory
+) -> Optional[EpisodeCache]:
+    """
+    Self-healing task scraper fallback:
+    If lookup for the requested episode inside EpisodeCache returns None or is missing,
+    this function re-scrapes the anime details page on the fly and populates EpisodeCache.
+    """
+    from app.database.models import SearchCache, EpisodeCache
+    from app.services.scraper import search_anime_scraper, get_episodes_scraper
+    from app.utils.match import get_best_slug_match, sanitize_search_query
+    
+    logger.info(f"Self-healing: Re-scraping episodes for anilist_id={anilist_id}, title={anime_title}")
+    
+    # 1. Try to find the anime in SearchCache to get details
+    async with db_session_factory() as session:
+        stmt = select(SearchCache).where(SearchCache.anilist_id == anilist_id)
+        res = await session.execute(stmt)
+        cache_entry = res.scalar_one_or_none()
+        
+        # If no SearchCache entry, we can create a temporary mockup
+        if not cache_entry:
+            logger.info(f"Self-healing: No SearchCache entry found for anilist_id={anilist_id}. Creating temporary one.")
+            cache_entry = SearchCache(
+                query_text=anime_title.lower(),
+                anilist_id=anilist_id,
+                title_english=anime_title,
+                title_romaji=anime_title,
+                description="لا يوجد"
+            )
+            session.add(cache_entry)
+            await session.commit()
+            
+        anime_slug = None
+        if cache_entry.title_romaji and cache_entry.title_romaji.startswith("WITANIME:"):
+            anime_slug = cache_entry.title_romaji.split(":", 1)[1]
+        else:
+            search_title = cache_entry.title_romaji or cache_entry.title_english or anime_title
+            cleaned_title = sanitize_search_query(search_title)
+            
+            matched_query = cleaned_title
+            scraper_results = await search_anime_scraper(cleaned_title)
+            
+            if not scraper_results and cache_entry.title_english:
+                cleaned_eng = sanitize_search_query(cache_entry.title_english)
+                if cleaned_eng != cleaned_title:
+                    matched_query = cleaned_eng
+                    scraper_results = await search_anime_scraper(cleaned_eng)
+                    
+            if not scraper_results:
+                words = cleaned_title.split()
+                if len(words) > 3:
+                    fallback_3 = " ".join(words[:3])
+                    matched_query = fallback_3
+                    scraper_results = await search_anime_scraper(fallback_3)
+                    
+            if not scraper_results:
+                words = cleaned_title.split()
+                if len(words) > 2:
+                    fallback_2 = " ".join(words[:2])
+                    matched_query = fallback_2
+                    scraper_results = await search_anime_scraper(fallback_2)
+                    
+            if scraper_results:
+                anime_slug = get_best_slug_match(scraper_results, matched_query)
+                
+        if not anime_slug:
+            logger.error(f"Self-healing failed: Could not find matching WitAnime slug for {anime_title}")
+            return None
+            
+        # 2. Scrape and populate episodes
+        scraped_data = await get_episodes_scraper(anime_slug)
+        if not scraped_data or not scraped_data.get("episodes"):
+            logger.error(f"Self-healing failed: Scraper returned no episodes for slug {anime_slug}")
+            return None
+            
+        episodes_list = scraped_data["episodes"]
+        
+        # Update search cache fields if needed
+        updated = False
+        if scraped_data.get("poster_url") and (not cache_entry.image_url or "default" in cache_entry.image_url):
+            cache_entry.image_url = scraped_data["poster_url"]
+            updated = True
+        if scraped_data.get("description") and scraped_data["description"] != "لا يوجد":
+            cache_entry.description = scraped_data["description"]
+            updated = True
+        if scraped_data.get("duration"):
+            cache_entry.duration = scraped_data["duration"]
+            updated = True
+        if updated:
+            session.add(cache_entry)
+            await session.commit()
+            
+        # 3. Delete old episodes and write fresh ones
+        stmt_del = select(EpisodeCache).where(EpisodeCache.anilist_id == anilist_id)
+        res_del = await session.execute(stmt_del)
+        old_eps = res_del.scalars().all()
+        for old_ep in old_eps:
+            await session.delete(old_ep)
+            
+        for ep in episodes_list:
+            db_ep = EpisodeCache(
+                anilist_id=anilist_id,
+                ep_number=ep["ep_number"],
+                play_url=ep["play_url"]
+            )
+            session.add(db_ep)
+        await session.commit()
+        
+        # 4. Get the requested episode entry
+        stmt_final = select(EpisodeCache).where(
+            (EpisodeCache.anilist_id == anilist_id) & (EpisodeCache.ep_number == episode_num)
+        )
+        res_final = await session.execute(stmt_final)
+        return res_final.scalar_one_or_none()
+
 async def execute_queued_task(
     task_id: int,
     user_id: int,
@@ -118,14 +237,25 @@ async def execute_queued_task(
         )
         res = await session.execute(stmt)
         ep_entry = res.scalar_one_or_none()
+        
+    if not ep_entry:
+        logger.warning(f"Failed to find episode in EpisodeCache for {anilist_id} ep {episode_num}. Triggering self-healing fallback...")
+        if status_msg_id:
+            try:
+                await bot.edit_message_text("🔄 لم يتم العثور على الحلقة بالكاش. جاري جلب وتحديث الحلقات من المخدم المساعد تلقائياً...", chat_id=chat_id, message_id=status_msg_id)
+            except Exception: pass
+            
+        ep_entry = await self_heal_episode_cache(anilist_id, anime_title, episode_num, db_session_factory)
+        
         if not ep_entry:
-            logger.error(f"Failed to find episode in EpisodeCache for {anilist_id} ep {episode_num}")
+            logger.error(f"Self-healing failed to find/scrape episode {episode_num} for anilist_id {anilist_id}")
             if status_msg_id:
                 try:
-                    await bot.edit_message_text("❌ انتهت صلاحية الجلسة. يرجى اختيار الحلقة مجدداً.", chat_id=chat_id, message_id=status_msg_id)
+                    await bot.edit_message_text("❌ فشل استرداد الحلقة تلقائياً. الرجاء إعادة محاولة البحث.", chat_id=chat_id, message_id=status_msg_id)
                 except Exception: pass
             return False
-        play_url = ep_entry.play_url
+            
+    play_url = ep_entry.play_url
 
     # 2. Get/Scrape Download Links
     qualities = {}
