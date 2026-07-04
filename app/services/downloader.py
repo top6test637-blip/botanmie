@@ -342,7 +342,7 @@ async def download_multipart(
                         raise Exception(f"Part returned status {response.status}")
                         
                     with open(part_path, "wb") as f:
-                        async for chunk in response.content.iter_chunked(256 * 1024): # 256 KB chunk
+                        async for chunk in response.content.iter_chunked(1024 * 1024): # 1 MB chunk
                             f.write(chunk)
                             downloaded_bytes[part_idx] += len(chunk)
                             
@@ -431,7 +431,7 @@ async def download_file(
     # Use multipart parallel downloader for direct files to bypass speed caps
     if total_size > 5 * 1024 * 1024:
         logger.info(f"Using multipart downloader for direct URL: {url}")
-        num_parts = 4 if ("mp4upload" in url or "yourupload" in url) else 16
+        num_parts = 6 if ("mp4upload" in url or "yourupload" in url) else 16
         success = await download_multipart(url, target_path, status_message, total_size, quality, num_parts=num_parts)
         if success:
             return True

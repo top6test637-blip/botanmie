@@ -90,9 +90,9 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
                 await db_session.delete(old_entry)
             await db_session.commit()
             
-            # Cache all resolved results (up to 5)
+            # Cache all resolved results (up to 10)
             logger.info(f"كاش جديد للبحث '{query}' يحتوي على {len(resolved_anime)} نتائج.")
-            for anime in resolved_anime[:5]:
+            for anime in resolved_anime[:10]:
                 new_cache = SearchCache(
                     query_text=query,
                     anilist_id=anime["anilist_id"],
@@ -127,6 +127,11 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
                 text=title[:40] + "..." if len(title) > 43 else title,
                 callback_data=f"sel_anime:{anime['anilist_id']}"
             )
+        ])
+        
+    if len(resolved_anime) > 5:
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="➕ إظهار المزيد من النتائج", callback_data=f"more_results:{query}")
         ])
 
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
@@ -340,4 +345,42 @@ async def handle_add_favorite(callback: CallbackQuery, db_session: AsyncSession)
         await db_session.rollback()
         import html
         await callback.answer(f"❌ فشل الحفظ: {html.escape(str(e))}", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("more_results:"))
+async def handle_more_results(callback: CallbackQuery, db_session: AsyncSession):
+    """Expards the search results keyboard to show all cached results (up to 10)."""
+    await callback.answer()
+    query = callback.data.split(":", 1)[1]
+    
+    # Retrieve all cached results from DB
+    stmt = select(SearchCache).where(SearchCache.query_text == query)
+    res = await db_session.execute(stmt)
+    cached_entries = res.scalars().all()
+    
+    if not cached_entries:
+        await callback.message.answer("❌ انتهت صلاحية البحث. يرجى كتابة اسم الأنمي مجدداً للبحث.")
+        return
+        
+    keyboard_buttons = []
+    for entry in cached_entries[:10]:
+        title = entry.title_english or entry.title_romaji
+        if title.startswith("WITANIME:"):
+            title = entry.title_english
+        keyboard_buttons.append([
+            InlineKeyboardButton(
+                text=title[:40] + "..." if len(title) > 43 else title,
+                callback_data=f"sel_anime:{entry.anilist_id}"
+            )
+        ])
+        
+    markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    try:
+        await callback.bot.edit_message_reply_markup(
+            chat_id=callback.message.chat.id,
+            message_id=callback.message.message_id,
+            reply_markup=markup
+        )
+    except Exception:
+        pass
 
