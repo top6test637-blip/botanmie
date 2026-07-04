@@ -202,6 +202,171 @@ async def lifespan(app: FastAPI):
 # Initialize FastAPI App
 app = FastAPI(lifespan=lifespan)
 
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
+from sqlalchemy import select
+from app.database.models import SearchCache, EpisodeCache, DownloadCache
+
+class WebAppEpisodePayload(BaseModel):
+    init_data: str
+    user_id: int
+    anilist_id: int
+    ep_number: str
+
+class WebAppQualityPayload(BaseModel):
+    init_data: str
+    user_id: int
+    db_cache_id: int
+    anilist_id: int
+    ep_number: str
+    quality: str
+
+@app.get("/webapp/episodes", response_class=HTMLResponse)
+async def webapp_episodes(anilist_id: int):
+    # Load episodes list from DB
+    async with AsyncSessionLocal() as db_session:
+        stmt = select(EpisodeCache).where(EpisodeCache.anilist_id == anilist_id)
+        res = await db_session.execute(stmt)
+        episodes = res.scalars().all()
+        
+        # Parse episodes using custom float sort to keep it in order
+        from app.handlers.search import parse_ep_num
+        episodes.sort(key=lambda x: parse_ep_num(x.ep_number))
+        
+        # Load HTML template file
+        template_path = os.path.join(os.path.dirname(__file__), "app", "templates", "episodes.html")
+        with open(template_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            
+        # Perform dynamic template replacement
+        buttons_html = ""
+        for ep in episodes:
+            buttons_html += f'<button class="btn" onclick="selectEpisode(\'{ep.ep_number}\')">{ep.ep_number}</button>\n'
+            
+        content = content.replace('{{ anilist_id }}', str(anilist_id))
+        
+        # Replace the Jinja block with our pre-built HTML
+        start_jinja = content.find('{% for ep in episodes %}')
+        end_jinja = content.find('{% endfor %}') + len('{% endfor %}')
+        if start_jinja != -1 and end_jinja != -1:
+            content = content[:start_jinja] + buttons_html + content[end_jinja:]
+            
+        return content
+
+@app.get("/webapp/qualities", response_class=HTMLResponse)
+async def webapp_qualities(db_cache_id: int, anilist_id: int, ep_number: str):
+    async with AsyncSessionLocal() as db_session:
+        stmt = select(DownloadCache).where(DownloadCache.id == db_cache_id)
+        res = await db_session.execute(stmt)
+        dl_cache = res.scalar_one_or_none()
+        
+        qualities = dl_cache.qualities if dl_cache else {}
+        
+        template_path = os.path.join(os.path.dirname(__file__), "app", "templates", "qualities.html")
+        with open(template_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            
+        # Build quality buttons HTML dynamically
+        buttons_html = ""
+        if "auto" in qualities or not qualities:
+            buttons_html += '<button class="btn btn-auto" onclick="selectQuality(\'auto\')">تلقائي (حجم ذكي &lt;= 2 جيجا)</button>\n'
+        for q in ["1080p", "720p", "480p", "360p"]:
+            if q in qualities:
+                btn_class = f"btn-{q}"
+                buttons_html += f'<button class="btn {btn_class}" onclick="selectQuality(\'{q}\')">{q}</button>\n'
+                
+        content = content.replace('{{ db_cache_id }}', str(db_cache_id))
+        content = content.replace('{{ anilist_id }}', str(anilist_id))
+        content = content.replace('{{ ep_number }}', str(ep_number))
+        
+        # Replace Jinja if blocks with our pre-built HTML
+        start_list = content.find('<div class="list" id="list">') + len('<div class="list" id="list">')
+        end_list = content.find('</div>', start_list)
+        if start_list != -1 and end_list != -1:
+            content = content[:start_list] + "\n" + buttons_html + content[end_list:]
+            
+        return content
+
+@app.post("/api/webapp/select_episode")
+async def api_select_episode(payload: WebAppEpisodePayload):
+    logger.info(f"WebApp api_select_episode payload: {payload}")
+    
+    async with AsyncSessionLocal() as db_session:
+        stmt = select(EpisodeCache).where(
+            (EpisodeCache.anilist_id == payload.anilist_id) & (EpisodeCache.ep_number == payload.ep_number)
+        )
+        res = await db_session.execute(stmt)
+        ep_entry = res.scalar_one_or_none()
+        
+        if not ep_entry:
+            return {"status": "error", "message": "Episode not found"}
+            
+        stmt_s = select(SearchCache).where(SearchCache.anilist_id == payload.anilist_id)
+        res_s = await db_session.execute(stmt_s)
+        cache_entry = res_s.scalars().first()
+        title = cache_entry.title_english or cache_entry.title_romaji if cache_entry else "أنمي"
+        if title.startswith("WITANIME:"):
+            title = cache_entry.title_english
+            
+        duration = cache_entry.duration if cache_entry else None
+        
+        # Trigger quality prompt in Telegram chat
+        from app.handlers.download import prompt_quality_selection
+        await prompt_quality_selection(
+            bot=bot,
+            chat_id=payload.user_id,
+            anilist_id=payload.anilist_id,
+            ep_number=payload.ep_number,
+            play_url=ep_entry.play_url,
+            anime_title=title,
+            duration=duration,
+            db_session=db_session
+        )
+        
+    return {"status": "ok"}
+
+@app.post("/api/webapp/select_quality")
+async def api_select_quality(payload: WebAppQualityPayload):
+    logger.info(f"WebApp api_select_quality payload: {payload}")
+    
+    async with AsyncSessionLocal() as db_session:
+        stmt_s = select(SearchCache).where(SearchCache.anilist_id == payload.anilist_id)
+        res_s = await db_session.execute(stmt_s)
+        cache_entry = res_s.scalars().first()
+        title = cache_entry.title_english or cache_entry.title_romaji if cache_entry else "أنمي"
+        if title.startswith("WITANIME:"):
+            title = cache_entry.title_english
+            
+        # Create enqueued status message
+        status_msg = await bot.send_message(
+            chat_id=payload.user_id,
+            text=(
+                f"⏳ **تم إضافة طلبك لقائمة الانتظار:**\n"
+                f"🎬 الأنمي: {title}\n"
+                f"🔢 الحلقة: {payload.ep_number}\n"
+                f"⚙️ الجودة: {payload.quality}\n\n"
+                f"🔄 جاري بدء المعالجة والتحميل، يرجى الانتظار..."
+            ),
+            parse_mode="Markdown"
+        )
+        
+        from app.database.models import PersistentTaskQueue
+        new_task = PersistentTaskQueue(
+            user_id=payload.user_id,
+            chat_id=payload.user_id,
+            message_id=status_msg.message_id,
+            anilist_id=payload.anilist_id,
+            anime_title=title,
+            episode_num=payload.ep_number,
+            quality=payload.quality,
+            status="pending"
+        )
+        db_session.add(new_task)
+        await db_session.commit()
+        logger.info(f"Enqueued WebApp download task {new_task.id} for User {payload.user_id}")
+        
+    return {"status": "ok"}
+
 @app.post("/webhook")
 async def webhook_endpoint(request: Request):
     if not bot or not dp:

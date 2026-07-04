@@ -21,6 +21,11 @@ class Config:
     # FastAPI Webhook and Library Configuration
     WEBHOOK_URL = os.getenv("WEBHOOK_URL", "").strip() or None
     LIBRARY_GROUP_ID = int(os.getenv("LIBRARY_GROUP_ID", "-1003757034229").strip())
+    
+    # Telegram Mini App Base URL
+    WEBAPP_BASE_URL = os.getenv("WEBAPP_BASE_URL", "").strip() or (
+        f"https://{os.getenv('RAILWAY_PUBLIC_DOMAIN')}" if os.getenv("RAILWAY_PUBLIC_DOMAIN") else "http://localhost:8080"
+    )
 
     # Static list of 10 modern organic browser User-Agents for dynamic header rotation
     USER_AGENTS = [
@@ -56,6 +61,7 @@ class Config:
         print(f"Super Admin ID: {cls.SUPER_ADMIN_ID}")
         print(f"Channel Username: {cls.CHANNEL_USERNAME or 'None'}")
         print(f"Telegram API Server: {cls.TELEGRAM_API_SERVER or 'Default (Official)'}")
+        print(f"WebApp Base URL: {cls.WEBAPP_BASE_URL}")
         print("----------------------------")
 
 # Create a global config instance

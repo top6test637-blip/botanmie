@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختر الحلقة</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            background-color: #121214;
+            color: #ffffff;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2 {
+            margin-top: 0;
+            font-size: 1.25rem;
+            text-align: center;
+            color: #e4e6eb;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            width: 100%;
+            max-width: 480px;
+            margin-top: 16px;
+        }
+        .btn {
+            background-color: #1b66c9; /* Premium Solid Blue background */
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 6px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            outline: none;
+        }
+        .btn:active {
+            background-color: #154b94;
+            transform: scale(0.95);
+        }
+        .loader {
+            display: none;
+            margin-top: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #1b66c9;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h2>اختر رقم الحلقة المطلوبة:</h2>
+    <div id="loader" class="loader"></div>
+    <div class="grid" id="grid">
+        <!-- Rendered dynamically by Python/JS -->
+        {% for ep in episodes %}
+        <button class="btn" onclick="selectEpisode('{{ ep.ep_number }}')">{{ ep.ep_number }}</button>
+        {% endfor %}
+    </div>
+
+    <script>
+        const webapp = window.Telegram.WebApp;
+        webapp.ready();
+        webapp.expand();
+
+        const anilistId = "{{ anilist_id }}";
+
+        async function selectEpisode(epNum) {
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('grid').style.pointerEvents = 'none';
+            
+            const initData = webapp.initData;
+            const user = webapp.initDataUnsafe?.user;
+            
+            try {
+                const response = await fetch('/api/webapp/select_episode', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        init_data: initData,
+                        user_id: user?.id,
+                        anilist_id: parseInt(anilistId),
+                        ep_number: epNum
+                    })
+                });
+                
+                if (response.ok) {
+                    webapp.close();
+                } else {
+                    alert("حدث خطأ أثناء إرسال اختيارك. يرجى المحاولة مجدداً.");
+                    document.getElementById('loader').style.display = 'none';
+                    document.getElementById('grid').style.pointerEvents = 'auto';
+                }
+            } catch (err) {
+                alert("فشل الاتصال بالخادم. تحقق من شبكتك.");
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('grid').style.pointerEvents = 'auto';
+            }
+        }
+    </script>
+</body>
+</html>

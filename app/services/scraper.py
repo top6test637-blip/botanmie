@@ -640,7 +640,19 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
             
             # Find server labels/names inside DOM
             soup = BeautifulSoup(html, "html.parser")
-            servers = soup.select("#episode-servers li a, .episode-servers a, #watch-servers a")
+            
+            # Try a broader and more resilient list of selectors for server elements
+            servers = []
+            for sel in [
+                "#episode-servers li", ".episode-servers li", "ul.servers-list li", ".servers-list li", 
+                "#watch-servers li", "li.server", "#episode-servers a", ".episode-servers a", 
+                "#watch-servers a", "ul.servers-list a", ".servers-list a"
+            ]:
+                found = soup.select(sel)
+                if found:
+                    servers = found
+                    break
+            
             server_names = [s.text.strip().lower() for s in servers]
             
             # Extract player registry keys
@@ -654,17 +666,22 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
             configs = json.loads(base64.b64decode(zk_match.group(1)).decode("utf-8"))
             
             resolved_links = {}
-            priority_indices = []
+            hls_indices = []
             other_indices = []
+            direct_indices = []
             
             for idx, (res, conf) in enumerate(zip(resources, configs)):
                 s_name = server_names[idx] if idx < len(server_names) else ""
-                if "streamwish" in s_name or "hglink" in s_name or "mp4upload" in s_name or "yona" in s_name or "videa" in s_name:
-                    priority_indices.append(idx)
+                # Prioritize active HLS streaming mirrors at the top of the queue
+                if any(x in s_name for x in ["streamwish", "yona", "yonaplay", "videa", "hglink"]):
+                    hls_indices.append(idx)
+                # Push direct file hosts to the absolute bottom of the queue
+                elif "mp4upload" in s_name or "yourupload" in s_name:
+                    direct_indices.append(idx)
                 else:
                     other_indices.append(idx)
                     
-            for idx in priority_indices + other_indices:
+            for idx in hls_indices + other_indices + direct_indices:
                 res = resources[idx]
                 conf = configs[idx]
                 s_name = server_names[idx] if idx < len(server_names) else ""

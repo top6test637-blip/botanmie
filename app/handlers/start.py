@@ -24,18 +24,18 @@ async def send_welcome_panel(message: Message, db_session: AsyncSession):
     
     keyboard = [
         [
-            InlineKeyboardButton(text="🔍 بحث", callback_data="menu_search"),
-            InlineKeyboardButton(text="🎲 إقترح لي", callback_data="menu_suggest")
+            InlineKeyboardButton(text="بحث", callback_data="menu_search"),
+            InlineKeyboardButton(text="إقترح لي", callback_data="menu_suggest")
         ],
         [
-            InlineKeyboardButton(text="⭐ قائمة المفضلة", callback_data="menu_favorites")
+            InlineKeyboardButton(text="قائمة المفضلة", callback_data="menu_favorites")
         ],
         [
-            InlineKeyboardButton(text="🛠️ الدعم الفني", callback_data="menu_support"),
-            InlineKeyboardButton(text="❓ مساعدة", callback_data="menu_help")
+            InlineKeyboardButton(text="الدعم الفني", callback_data="menu_support"),
+            InlineKeyboardButton(text="مساعدة", callback_data="menu_help")
         ],
         [
-            InlineKeyboardButton(text="📢 للإعلانات والتمويل", callback_data="menu_ads")
+            InlineKeyboardButton(text="للإعلانات والتمويل", callback_data="menu_ads")
         ]
     ]
     
@@ -46,7 +46,7 @@ async def send_welcome_panel(message: Message, db_session: AsyncSession):
     )
     
     if is_user_admin:
-        keyboard.append([InlineKeyboardButton(text="🛠️ لوحة تحكم الإدارة (Admin)", callback_data="admin_home")])
+        keyboard.append([InlineKeyboardButton(text="لوحة تحكم الإدارة (Admin)", callback_data="admin_home")])
         welcome_text += (
             "🛠️ <b>قسم الإدارة والمسؤولين:</b>\n"
             "مرحباً بك كمسؤول في البوت. إليك الأوامر المتاحة لك:\n"
@@ -89,7 +89,7 @@ async def cmd_start(message: Message, db_session: AsyncSession, state: FSMContex
             try:
                 cache_id = int(deep_link.split("_")[1])
                 from sqlalchemy import select
-                from app.database.models import DownloadCache
+                from app.database.models import DownloadCache, EpisodeCache
                 
                 stmt = select(DownloadCache).where(DownloadCache.id == cache_id)
                 res = await db_session.execute(stmt)
@@ -97,24 +97,20 @@ async def cmd_start(message: Message, db_session: AsyncSession, state: FSMContex
                 
                 if dl_cache:
                     await state.clear()
-                    quality_emojis = {
-                        "1080p": "🔴 1080p",
-                        "720p": "🔵 720p",
-                        "480p": "🟢 480p",
-                        "360p": "🟡 360p"
-                    }
+                    
+                    stmt_ep = select(EpisodeCache).where(EpisodeCache.play_url == dl_cache.play_url)
+                    res_ep = await db_session.execute(stmt_ep)
+                    ep_entry = res_ep.scalar_one_or_none()
+                    anilist_id = ep_entry.anilist_id if ep_entry else 0
+                    ep_number = ep_entry.ep_number if ep_entry else "1"
+                    
+                    from config import config
+                    from aiogram.types import WebAppInfo
+                    webapp_url = f"{config.WEBAPP_BASE_URL}/webapp/qualities?db_cache_id={dl_cache.id}&anilist_id={anilist_id}&ep_number={ep_number}"
                     
                     keyboard_buttons = [
-                        [InlineKeyboardButton(text="⚡ تلقائي (حجم ذكي <= 2 جيجا)", callback_data=f"dl:auto:{dl_cache.id}")]
+                        [InlineKeyboardButton(text="اختر الجودة", web_app=WebAppInfo(url=webapp_url))]
                     ]
-                    quality_row = []
-                    for q in ["1080p", "720p", "480p", "360p"]:
-                        if q in dl_cache.qualities:
-                            emoji_text = quality_emojis.get(q, q)
-                            quality_row.append(InlineKeyboardButton(text=emoji_text, callback_data=f"dl:{q}:{dl_cache.id}"))
-                    if quality_row:
-                        keyboard_buttons.append(quality_row)
-                        
                     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
                     
                     anime_title = "أنمي"
@@ -216,7 +212,7 @@ async def handle_menu_suggest(callback: CallbackQuery):
     await callback.answer()
     suggested = random.choice(SUGGESTIONS)
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"🔍 ابحث عن {suggested}", callback_data=f"suggest_search:{suggested}")]
+        [InlineKeyboardButton(text=f"ابحث عن {suggested}", callback_data=f"suggest_search:{suggested}")]
     ])
     await callback.message.answer(
         f"🎲 <b>اقتراح اليوم لك:</b>\n\n"
@@ -259,7 +255,7 @@ async def handle_menu_favorites(callback: CallbackQuery, db_session: AsyncSessio
         for f in favs:
             keyboard.append([InlineKeyboardButton(text=f.anime_title, callback_data=f"suggest_search:{f.anime_title}")])
             
-    keyboard.append([InlineKeyboardButton(text="🔙 العودة للرئيسية 🏠", callback_data="check_sub")])
+    keyboard.append([InlineKeyboardButton(text="العودة للرئيسية", callback_data="check_sub")])
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     
     try:
@@ -276,7 +272,7 @@ async def handle_menu_support(callback: CallbackQuery):
         "👉 @botanmie_support\n\n"
         "نشكرك على استخدام خدماتنا! ❤️"
     )
-    keyboard = [[InlineKeyboardButton(text="🔙 العودة للرئيسية 🏠", callback_data="check_sub")]]
+    keyboard = [[InlineKeyboardButton(text="العودة للرئيسية", callback_data="check_sub")]]
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     try:
         await callback.message.edit_text(support_text, reply_markup=markup, parse_mode="HTML")
@@ -301,7 +297,7 @@ async def handle_menu_help(callback: CallbackQuery):
         "• <b>أزرار التنقل السريعة</b>: عند استلام الفيديو، ستجد أزرار تنقل تحت الفيديو مباشرة (`◀️ الحلقة السابقة` | `🔢 حلقة أخرى` | `▶️ الحلقة التالية`) لتشغيل الحلقة التالية بلمسة واحدة دون البحث مجدداً.\n"
         "• <b>سرعة ودعم فائق</b>: يدعم البوت تنزيل الحلقات والأفلام ذات الأحجام الضخمة حتى 2 جيجابايت لتلبي كافة الاحتياجات."
     )
-    keyboard = [[InlineKeyboardButton(text="🔙 العودة للرئيسية 🏠", callback_data="check_sub")]]
+    keyboard = [[InlineKeyboardButton(text="العودة للرئيسية", callback_data="check_sub")]]
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     try:
         await callback.message.edit_text(help_text, reply_markup=markup, parse_mode="HTML")
@@ -317,7 +313,7 @@ async def handle_menu_ads(callback: CallbackQuery):
         "👉 @botanmie_admin\n\n"
         "رأيكم ودعمكم يهمنا! 🌟"
     )
-    keyboard = [[InlineKeyboardButton(text="🔙 العودة للرئيسية 🏠", callback_data="check_sub")]]
+    keyboard = [[InlineKeyboardButton(text="العودة للرئيسية", callback_data="check_sub")]]
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     try:
         await callback.message.edit_text(ads_text, reply_markup=markup, parse_mode="HTML")

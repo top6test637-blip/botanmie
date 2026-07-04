@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختر الجودة</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body {
+            background-color: #121214;
+            color: #ffffff;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2 {
+            margin-top: 0;
+            font-size: 1.25rem;
+            text-align: center;
+            color: #e4e6eb;
+        }
+        .list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+            max-width: 400px;
+            margin-top: 16px;
+        }
+        .btn {
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            transition: opacity 0.2s ease, transform 0.1s ease;
+            outline: none;
+        }
+        .btn:active {
+            opacity: 0.8;
+            transform: scale(0.98);
+        }
+        /* Color backgrounds */
+        .btn-auto {
+            background-color: #28a745; /* Solid Green */
+        }
+        .btn-1080p {
+            background-color: #dc3545; /* Solid Red */
+        }
+        .btn-720p {
+            background-color: #007bff; /* Solid Blue */
+        }
+        .btn-480p {
+            background-color: #6f42c1; /* Solid Purple */
+        }
+        .btn-360p {
+            background-color: #6c757d; /* Solid Gray */
+        }
+        .loader {
+            display: none;
+            margin-top: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #007bff;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h2>اختر جودة تحميل الفيديو المفضلة:</h2>
+    <div id="loader" class="loader"></div>
+    <div class="list" id="list">
+        {% if "auto" in qualities %}
+        <button class="btn btn-auto" onclick="selectQuality('auto')">تلقائي (حجم ذكي <= 2 جيجا)</button>
+        {% endif %}
+        {% if "1080p" in qualities %}
+        <button class="btn btn-1080p" onclick="selectQuality('1080p')">1080p</button>
+        {% endif %}
+        {% if "720p" in qualities %}
+        <button class="btn btn-720p" onclick="selectQuality('720p')">720p</button>
+        {% endif %}
+        {% if "480p" in qualities %}
+        <button class="btn btn-480p" onclick="selectQuality('480p')">480p</button>
+        {% endif %}
+        {% if "360p" in qualities %}
+        <button class="btn btn-360p" onclick="selectQuality('360p')">360p</button>
+        {% endif %}
+    </div>
+
+    <script>
+        const webapp = window.Telegram.WebApp;
+        webapp.ready();
+        webapp.expand();
+
+        const dbCacheId = "{{ db_cache_id }}";
+        const anilistId = "{{ anilist_id }}";
+        const epNumber = "{{ ep_number }}";
+
+        async function selectQuality(quality) {
+            document.getElementById('loader').style.display = 'block';
+            document.getElementById('list').style.pointerEvents = 'none';
+            
+            const initData = webapp.initData;
+            const user = webapp.initDataUnsafe?.user;
+            
+            try {
+                const response = await fetch('/api/webapp/select_quality', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        init_data: initData,
+                        user_id: user?.id,
+                        db_cache_id: parseInt(dbCacheId),
+                        anilist_id: parseInt(anilistId),
+                        ep_number: epNumber,
+                        quality: quality
+                    })
+                });
+                
+                if (response.ok) {
+                    webapp.close();
+                } else {
+                    alert("حدث خطأ أثناء إرسال اختيارك. يرجى المحاولة مجدداً.");
+                    document.getElementById('loader').style.display = 'none';
+                    document.getElementById('list').style.pointerEvents = 'auto';
+                }
+            } catch (err) {
+                alert("فشل الاتصال بالخادم. تحقق من شبكتك.");
+                document.getElementById('loader').style.display = 'none';
+                document.getElementById('list').style.pointerEvents = 'auto';
+            }
+        }
+    </script>
+</body>
+</html>

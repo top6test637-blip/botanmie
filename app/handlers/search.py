@@ -132,7 +132,7 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
         
     if len(resolved_anime) > 5:
         keyboard_buttons.append([
-            InlineKeyboardButton(text="➕ إظهار المزيد من النتائج", callback_data=f"more_results:{query}")
+            InlineKeyboardButton(text="إظهار المزيد من النتائج", callback_data=f"more_results:{query}")
         ])
 
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
@@ -319,72 +319,24 @@ async def render_episode_keyboard(
     if title.startswith("WITANIME:"):
         title = cache_entry.title_english
         
-    stmt_eps = select(EpisodeCache).where(EpisodeCache.anilist_id == anilist_id)
-    res_eps = await db_session.execute(stmt_eps)
-    cached_episodes = res_eps.scalars().all()
+    from config import config
+    from aiogram.types import WebAppInfo
+    webapp_url = f"{config.WEBAPP_BASE_URL}/webapp/episodes?anilist_id={anilist_id}"
     
-    cached_episodes.sort(key=lambda x: parse_ep_num(x.ep_number))
-    total_episodes = len(cached_episodes)
+    inline_keyboard = [
+        [InlineKeyboardButton(text="اختر الحلقة", web_app=WebAppInfo(url=webapp_url))],
+        [
+            InlineKeyboardButton(text="رجوع للبحث", callback_data=f"back_to_search:{anilist_id}"),
+            InlineKeyboardButton(text="إضافة للمفضلة", callback_data=f"fav_add:{anilist_id}")
+        ]
+    ]
+    markup = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
     
-    if total_episodes > 100 and start_ep is None:
-        # Show 100-episode blocks
-        blocks = []
-        for start in range(1, total_episodes + 1, 100):
-            end = min(start + 99, total_episodes)
-            blocks.append(InlineKeyboardButton(
-                text=f"📂 {start} - {end}",
-                callback_data=f"ep_block:{anilist_id}:{start}:{end}"
-            ))
-        inline_keyboard = [blocks[i:i+2] for i in range(0, len(blocks), 2)]
-        inline_keyboard.append([
-            InlineKeyboardButton(text="🔙 رجوع للبحث 🔍", callback_data=f"back_to_search:{anilist_id}"),
-            InlineKeyboardButton(text="⭐ إضافة للمفضلة", callback_data=f"fav_add:{anilist_id}")
-        ])
-        markup = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
-        
-        text = (
-            f"🎬 **الأنمي المختار**: {title}\n"
-            f"📝 القصة: {cache_entry.description[:250] + '...' if cache_entry.description else 'لا يوجد'}\n\n"
-            f"الرجاء اختيار مجموعة الحلقات:"
-        )
-    else:
-        grid_eps = []
-        if start_ep is not None and end_ep is not None:
-            for ep in cached_episodes:
-                val = parse_ep_num(ep.ep_number)
-                if start_ep <= val <= end_ep:
-                    grid_eps.append(ep)
-        else:
-            grid_eps = cached_episodes
-            
-        inline_keyboard = []
-        row = []
-        for ep in grid_eps:
-            row.append(InlineKeyboardButton(
-                text=f"🔹 الحلقة {ep.ep_number}",
-                callback_data=f"sel_ep_click:{anilist_id}:{ep.ep_number}"
-            ))
-            if len(row) == 3:
-                inline_keyboard.append(row)
-                row = []
-        if row:
-            inline_keyboard.append(row)
-            
-        bottom_row = []
-        if total_episodes > 100:
-            bottom_row.append(InlineKeyboardButton(text="🔙 رجوع للمجموعات 📂", callback_data=f"ep_blocks_home:{anilist_id}"))
-        else:
-            bottom_row.append(InlineKeyboardButton(text="🔙 رجوع للبحث 🔍", callback_data=f"back_to_search:{anilist_id}"))
-        bottom_row.append(InlineKeyboardButton(text="⭐ إضافة للمفضلة", callback_data=f"fav_add:{anilist_id}"))
-        inline_keyboard.append(bottom_row)
-        markup = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
-        
-        range_str = f" من {start_ep} إلى {end_ep}" if start_ep else ""
-        text = (
-            f"🎬 **{title}**\n"
-            f"📦 الحلقات{range_str}:\n\n"
-            f"الرجاء اختيار الحلقة التي ترغب في مشاهدتها:"
-        )
+    text = (
+        f"**الأنمي المختار**: {title}\n"
+        f"القصة: {cache_entry.description[:250] + '...' if cache_entry.description else 'لا يوجد'}\n\n"
+        f"اضغط على الزر بالأسفل لفتح قائمة الحلقات واختيار الحلقة المطلوبة:"
+    )
         
     if message_id:
         try:
@@ -620,7 +572,7 @@ async def handle_back_to_search(callback: CallbackQuery, db_session: AsyncSessio
         
     if len(cached_entries) > 5:
         keyboard_buttons.append([
-            InlineKeyboardButton(text="➕ إظهار المزيد من النتائج", callback_data=f"more_results:{query}")
+            InlineKeyboardButton(text="إظهار المزيد من النتائج", callback_data=f"more_results:{query}")
         ])
         
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
