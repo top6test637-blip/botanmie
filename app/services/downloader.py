@@ -23,7 +23,7 @@ def make_progress_bar(percentage: float, length: int = 10) -> str:
     empty = max(length - filled, 0)
     return "█" * filled + "░" * empty
 
-def get_session_connector(limit: int = 50) -> aiohttp.BaseConnector:
+def get_session_connector(limit: int = 250) -> aiohttp.BaseConnector:
     """Creates a connection-pooled connector with a custom limit."""
     if config.PROXY_URL:
         try:
@@ -184,10 +184,10 @@ async def download_hls(
     quality: str
 ) -> bool:
     """
-    Downloads HLS playlist concurrently using asyncio.gather (up to 8 parallel connections),
+    Downloads HLS playlist concurrently using asyncio.gather (up to 80 parallel connections),
     stripping fake PNG headers, and merging segments. Reuses ClientSession with large connection pooling.
     """
-    connector = get_session_connector(limit=50)
+    connector = get_session_connector(limit=250)
     referer = get_referer_for_url(m3u8_url)
     headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
     
@@ -239,7 +239,7 @@ async def download_hls(
             estimated_total_size = total_segments * actual_seg_size
             
             # Spawn parallel download tasks
-            semaphore = asyncio.Semaphore(8)
+            semaphore = asyncio.Semaphore(80)
             tasks = [
                 download_segment(idx, seg_url, session, headers, is_png_wrapped, semaphore)
                 for idx, seg_url in enumerate(segment_urls)
@@ -313,7 +313,7 @@ async def download_multipart(
     num_parts: int = 16
 ) -> bool:
     """Downloads a direct file in parallel parts using HTTP Range requests to maximize speed."""
-    connector = get_session_connector(limit=50)
+    connector = get_session_connector(limit=250)
     referer = get_referer_for_url(url)
     headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
     
@@ -441,7 +441,7 @@ async def download_file(
             return True
         logger.warning("Multipart download failed or not supported. Falling back to single-connection download.")
 
-    connector = get_session_connector(limit=50)
+    connector = get_session_connector(limit=250)
     referer = get_referer_for_url(url)
     headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
     if config.PROXY_URL:
