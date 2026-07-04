@@ -243,17 +243,21 @@ async def handle_menu_favorites(callback: CallbackQuery, db_session: AsyncSessio
     res = await db_session.execute(stmt)
     favs = res.scalars().all()
     
+    keyboard = []
     if not favs:
-        await callback.message.answer("⭐ <b>قائمة المفضلة فارغة حالياً.</b>\nيمكنك إضافة أي أنمي للمفضلة عند البحث عنه وعرض تفاصيله!", parse_mode="HTML")
-        return
-        
-    text = "⭐ <b>قائمة الأنميات المفضلة لديك:</b>\n\n"
-    buttons = []
-    for f in favs:
-        buttons.append([InlineKeyboardButton(text=f.anime_title, callback_data=f"suggest_search:{f.anime_title}")])
-        
-    markup = InlineKeyboardMarkup(inline_keyboard=buttons)
-    await callback.message.answer(text, reply_markup=markup, parse_mode="HTML")
+        text = "⭐ <b>قائمة المفضلة فارغة حالياً.</b>\nيمكنك إضافة أي أنمي للمفضلة عند البحث عنه وعرض تفاصيله!"
+    else:
+        text = "⭐ <b>قائمة الأنميات المفضلة لديك:</b>\n\n"
+        for f in favs:
+            keyboard.append([InlineKeyboardButton(text=f.anime_title, callback_data=f"suggest_search:{f.anime_title}")])
+            
+    keyboard.append([InlineKeyboardButton(text="« رجوع للرئيسية", callback_data="check_sub")])
+    markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+    
+    try:
+        await callback.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(text, reply_markup=markup, parse_mode="HTML")
 
 @router.callback_query(F.data == "menu_support")
 async def handle_menu_support(callback: CallbackQuery):
@@ -264,7 +268,12 @@ async def handle_menu_support(callback: CallbackQuery):
         "👉 @botanmie_support\n\n"
         "نشكرك على استخدام خدماتنا! ❤️"
     )
-    await callback.message.answer(support_text, parse_mode="HTML")
+    keyboard = [[InlineKeyboardButton(text="« رجوع للرئيسية", callback_data="check_sub")]]
+    markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+    try:
+        await callback.message.edit_text(support_text, reply_markup=markup, parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(support_text, reply_markup=markup, parse_mode="HTML")
 
 @router.callback_query(F.data == "menu_help")
 async def handle_menu_help(callback: CallbackQuery):
@@ -284,7 +293,12 @@ async def handle_menu_help(callback: CallbackQuery):
         "• <b>أزرار التنقل السريعة</b>: عند استلام الفيديو، ستجد أزرار تنقل تحت الفيديو مباشرة (`◀️ الحلقة السابقة` | `🔢 حلقة أخرى` | `▶️ الحلقة التالية`) لتشغيل الحلقة التالية بلمسة واحدة دون البحث مجدداً.\n"
         "• <b>سرعة ودعم فائق</b>: يدعم البوت تنزيل الحلقات والأفلام ذات الأحجام الضخمة حتى 2 جيجابايت لتلبي كافة الاحتياجات."
     )
-    await callback.message.answer(help_text, parse_mode="HTML")
+    keyboard = [[InlineKeyboardButton(text="« رجوع للرئيسية", callback_data="check_sub")]]
+    markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+    try:
+        await callback.message.edit_text(help_text, reply_markup=markup, parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(help_text, reply_markup=markup, parse_mode="HTML")
 
 @router.callback_query(F.data == "menu_ads")
 async def handle_menu_ads(callback: CallbackQuery):
@@ -295,4 +309,9 @@ async def handle_menu_ads(callback: CallbackQuery):
         "👉 @botanmie_admin\n\n"
         "رأيكم ودعمكم يهمنا! 🌟"
     )
-    await callback.message.answer(ads_text, parse_mode="HTML")
+    keyboard = [[InlineKeyboardButton(text="« رجوع للرئيسية", callback_data="check_sub")]]
+    markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+    try:
+        await callback.message.edit_text(ads_text, reply_markup=markup, parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(ads_text, reply_markup=markup, parse_mode="HTML")

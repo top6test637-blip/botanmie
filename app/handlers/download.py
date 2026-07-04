@@ -225,6 +225,11 @@ async def prompt_quality_selection(
     if quality_row:
         keyboard_buttons.append(quality_row)
         
+    # Always add return to episodes list button
+    keyboard_buttons.append([
+        InlineKeyboardButton(text="« رجوع للحلقات", callback_data=f"nav_grid:{anilist_id}")
+    ])
+        
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     
     await bot.send_message(

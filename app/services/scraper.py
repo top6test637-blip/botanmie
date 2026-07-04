@@ -545,10 +545,10 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
             pass
             
     # Handle Streamwish/Hlswish mirrors (which change domains frequently)
-    wish_domains = ["streamwish", "hlswish", "stwish", "ninjastr", "awish", "wishembed", "wishfast", "closwish", "cybervynx", "swdyu", "flaswish", "sfastwish", "obeywish", "jodwish", "embedwish", "cdnwish", "strwish", "iplayerhls"]
+    wish_domains = ["streamwish", "hlswish", "stwish", "ninjastr", "awish", "wishembed", "wishfast", "closwish", "cybervynx", "swdyu", "flaswish", "sfastwish", "obeywish", "jodwish", "embedwish", "cdnwish", "strwish", "iplayerhls", "suzihazarpc"]
     if any(d in embed_url for d in wish_domains):
         video_id = None
-        for path_prefix in ["/e/", "/watch/", "/embed/"]:
+        for path_prefix in ["/e/", "/watch/", "/embed/", "/v/"]:
             if path_prefix in embed_url:
                 try:
                     video_id = embed_url.split(path_prefix)[1].split("?")[0].strip("/")
@@ -600,21 +600,21 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
                         m3u8_url = m3u8_matches[0]
                         logger.info(f"Resolved streamwish mirror HLS stream: {m3u8_url}")
                         return m3u8_url
-                else:
-                    # Regular regex search inside non-packed body
-                    match = re.search(r'const\s+src\s*=\s*["\']([^"\']+\.m3u8[^"\']*)["\']', text)
-                    if not match:
-                        match = re.search(r'src\s*:\s*["\']([^"\']+\.m3u8[^"\']*)["\']', text)
-                    if not match:
-                        match = re.search(r'["\']([^"\']+\.m3u8[^"\']*)["\']', text)
-                    if match:
-                        m3u8_url = match.group(1)
-                        # Validate: must start with http and not be a JSON blob
-                        if m3u8_url.startswith('http') and len(m3u8_url) < 2000:
-                            logger.info(f"Resolved master .m3u8 playlist: {m3u8_url}")
-                            return m3u8_url
-                        else:
-                            logger.warning(f"Skipping invalid m3u8 match (len={len(m3u8_url)}): not a valid URL")
+                
+                # Regular regex search inside non-packed body (outside of if script_match block)
+                match = re.search(r'const\s+src\s*=\s*["\']([^"\']+\.m3u8[^"\']*)["\']', text)
+                if not match:
+                    match = re.search(r'src\s*:\s*["\']([^"\']+\.m3u8[^"\']*)["\']', text)
+                if not match:
+                    match = re.search(r'["\']([^"\']+\.m3u8[^"\']*)["\']', text)
+                if match:
+                    m3u8_url = match.group(1)
+                    # Validate: must start with http and not be a JSON blob
+                    if m3u8_url.startswith('http') and len(m3u8_url) < 2000:
+                        logger.info(f"Resolved master .m3u8 playlist: {m3u8_url}")
+                        return m3u8_url
+                    else:
+                        logger.warning(f"Skipping invalid m3u8 match (len={len(m3u8_url)}): not a valid URL")
         except Exception:
             logger.exception(f"Error in process while resolving mirror embed URL {url}")
     return None

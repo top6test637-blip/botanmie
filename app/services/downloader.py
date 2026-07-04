@@ -341,9 +341,14 @@ async def download_multipart(
     num_parts: int = 16
 ) -> bool:
     """Downloads a direct file in parallel parts using HTTP Range requests to maximize speed."""
-    connector = get_session_connector(limit=100)
+    connector = get_session_connector(limit=0)
     referer = get_referer_for_url(url)
     headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
+    
+    keep_alive_headers = {
+        "Connection": "keep-alive",
+        "Keep-Alive": "timeout=30, max=1000"
+    }
     
     chunk_size = total_size // num_parts
     ranges = []
@@ -360,8 +365,8 @@ async def download_multipart(
     last_update = 0
     
     async def download_part(part_idx: int, start_byte: int, end_byte: int, part_path: Path, session: aiohttp.ClientSession):
-        # Staggered connection starts to prevent triggering firewalls/DDoS rate limits
-        await asyncio.sleep(0.15 * part_idx)
+        # Staggered connection starts to prevent triggering firewalls/DDoS rate limits (very fast start)
+        await asyncio.sleep(0.01 * part_idx)
         
         part_headers = headers.copy()
         part_headers["Range"] = f"bytes={start_byte}-{end_byte}"
@@ -412,7 +417,7 @@ async def download_multipart(
         return False
 
     try:
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession(connector=connector, headers=keep_alive_headers) as session:
             tasks = [
                 download_part(i, start, end, part_files[i], session)
                 for i, (start, end) in enumerate(ranges)
@@ -469,9 +474,15 @@ async def download_file(
             return True
         logger.warning("Multipart download failed or not supported. Falling back to single-connection download.")
 
-    connector = get_session_connector(limit=100)
+    connector = get_session_connector(limit=0)
     referer = get_referer_for_url(url)
     headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
+    
+    keep_alive_headers = {
+        "Connection": "keep-alive",
+        "Keep-Alive": "timeout=30, max=1000"
+    }
+    
     if config.PROXY_URL:
         logger.info(f"Proxy used for request: {config.PROXY_URL}")
         
@@ -481,7 +492,7 @@ async def download_file(
     last_update = 0
     
     try:
-        async with aiohttp.ClientSession(connector=connector) as session:
+        async with aiohttp.ClientSession(connector=connector, headers=keep_alive_headers) as session:
             client_timeout = aiohttp.ClientTimeout(total=None, sock_read=60)
             async with session.get(url, headers=headers, ssl=False, timeout=client_timeout) as response:
                 if response.status != 200:

@@ -336,7 +336,10 @@ async def render_episode_keyboard(
                 callback_data=f"ep_block:{anilist_id}:{start}:{end}"
             ))
         inline_keyboard = [blocks[i:i+2] for i in range(0, len(blocks), 2)]
-        inline_keyboard.append([InlineKeyboardButton(text="⭐ إضافة إلى المفضلة", callback_data=f"fav_add:{anilist_id}")])
+        inline_keyboard.append([
+            InlineKeyboardButton(text="« رجوع للبحث", callback_data=f"back_to_search:{anilist_id}"),
+            InlineKeyboardButton(text="⭐ إضافة إلى المفضلة", callback_data=f"fav_add:{anilist_id}")
+        ])
         markup = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
         
         text = (
@@ -370,6 +373,8 @@ async def render_episode_keyboard(
         bottom_row = []
         if total_episodes > 100:
             bottom_row.append(InlineKeyboardButton(text="« رجوع للقائمة", callback_data=f"ep_blocks_home:{anilist_id}"))
+        else:
+            bottom_row.append(InlineKeyboardButton(text="« رجوع للبحث", callback_data=f"back_to_search:{anilist_id}"))
         bottom_row.append(InlineKeyboardButton(text="⭐ إضافة إلى المفضلة", callback_data=f"fav_add:{anilist_id}"))
         inline_keyboard.append(bottom_row)
         markup = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
@@ -574,4 +579,75 @@ async def handle_more_results(callback: CallbackQuery, db_session: AsyncSession)
         )
     except Exception:
         pass
+
+
+@router.callback_query(F.data.startswith("back_to_search:"))
+async def handle_back_to_search(callback: CallbackQuery, db_session: AsyncSession):
+    anilist_id = int(callback.data.split(":")[1])
+    await callback.answer()
+    
+    # 1. Get search query from cache
+    stmt = select(SearchCache).where(SearchCache.anilist_id == anilist_id)
+    res = await db_session.execute(stmt)
+    cache_entry = res.scalars().first()
+    if not cache_entry:
+        await callback.message.answer("❌ انتهت صلاحية البحث. يرجى كتابة اسم الأنمي مجدداً للبحث.")
+        return
+        
+    query = cache_entry.query_text
+    
+    # 2. Retrieve all cached entries for this query
+    stmt_all = select(SearchCache).where(SearchCache.query_text == query)
+    res_all = await db_session.execute(stmt_all)
+    cached_entries = res_all.scalars().all()
+    
+    if not cached_entries:
+        await callback.message.answer("❌ انتهت صلاحية البحث. يرجى كتابة اسم الأنمي مجدداً للبحث.")
+        return
+        
+    # 3. Build search results keyboard
+    keyboard_buttons = []
+    for entry in cached_entries[:5]:
+        title = entry.title_english or entry.title_romaji
+        if title.startswith("WITANIME:"):
+            title = entry.title_english
+        keyboard_buttons.append([
+            InlineKeyboardButton(
+                text=title[:40] + "..." if len(title) > 43 else title,
+                callback_data=f"sel_anime:{entry.anilist_id}"
+            )
+        ])
+        
+    if len(cached_entries) > 5:
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="➕ إظهار المزيد من النتائج", callback_data=f"more_results:{query}")
+        ])
+        
+    markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    
+    # If the message had a photo caption, edit it back or edit text
+    try:
+        if callback.message.caption:
+            await callback.bot.edit_message_caption(
+                chat_id=callback.message.chat.id,
+                message_id=callback.message.message_id,
+                caption="✨ **نتائج البحث**:\nاختر الأنمي لعرض خيارات الحلقات والتحميل:",
+                reply_markup=markup,
+                parse_mode="Markdown"
+            )
+        else:
+            await callback.bot.edit_message_text(
+                chat_id=callback.message.chat.id,
+                message_id=callback.message.message_id,
+                text="✨ **نتائج البحث**:\nاختر الأنمي لعرض خيارات الحلقات والتحميل:",
+                reply_markup=markup,
+                parse_mode="Markdown"
+            )
+    except Exception:
+        # Fallback to sending new
+        await callback.message.answer(
+            "✨ **نتائج البحث**:\nاختر الأنمي لعرض خيارات الحلقات والتحميل:",
+            reply_markup=markup,
+            parse_mode="Markdown"
+        )
 
