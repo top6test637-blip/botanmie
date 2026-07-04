@@ -23,7 +23,7 @@ def make_progress_bar(percentage: float, length: int = 10) -> str:
     empty = max(length - filled, 0)
     return "█" * filled + "░" * empty
 
-def get_session_connector(limit: int = 250) -> aiohttp.BaseConnector:
+def get_session_connector(limit: int = 100) -> aiohttp.BaseConnector:
     """Creates a connection-pooled connector with a custom limit."""
     if config.PROXY_URL:
         try:
@@ -160,21 +160,23 @@ async def download_segment(
     semaphore: asyncio.Semaphore
 ) -> Tuple[int, Optional[bytes]]:
     """Downloads a single segment chunk, checking and stripping fake PNG signature with retry mechanism."""
+    max_retries = 5
     async with semaphore:
-        for attempt in range(3):
+        for attempt in range(max_retries):
             try:
-                async with session.get(seg_url, headers=headers, ssl=False, timeout=20) as resp:
+                async with session.get(seg_url, headers=headers, ssl=False, timeout=30) as resp:
                     if resp.status == 200:
                         seg_data = await resp.read()
                         if is_png_wrapped and seg_data.startswith(b"\x89PNG"):
                             seg_data = seg_data[252:]
                         return idx, seg_data
                     else:
-                        logger.warning(f"[Attempt {attempt+1}/3] Segment {idx} download returned status {resp.status}")
+                        logger.warning(f"[Attempt {attempt+1}/{max_retries}] Segment {idx} download returned status {resp.status}")
             except Exception as e:
-                logger.warning(f"[Attempt {attempt+1}/3] Segment {idx} download error: {e}")
-            if attempt < 2:
-                await asyncio.sleep(2.0)
+                logger.warning(f"[Attempt {attempt+1}/{max_retries}] Segment {idx} download error: {e}")
+            if attempt < max_retries - 1:
+                backoff = min(2 * (2 ** attempt), 16)
+                await asyncio.sleep(backoff)
         return idx, None
 
 async def download_hls(
@@ -184,10 +186,10 @@ async def download_hls(
     quality: str
 ) -> bool:
     """
-    Downloads HLS playlist concurrently using asyncio.gather (up to 80 parallel connections),
+    Downloads HLS playlist concurrently using asyncio.gather (up to 20 parallel connections),
     stripping fake PNG headers, and merging segments. Reuses ClientSession with large connection pooling.
     """
-    connector = get_session_connector(limit=250)
+    connector = get_session_connector(limit=100)
     referer = get_referer_for_url(m3u8_url)
     headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
     
@@ -239,7 +241,7 @@ async def download_hls(
             estimated_total_size = total_segments * actual_seg_size
             
             # Spawn parallel download tasks
-            semaphore = asyncio.Semaphore(80)
+            semaphore = asyncio.Semaphore(20)
             tasks = [
                 download_segment(idx, seg_url, session, headers, is_png_wrapped, semaphore)
                 for idx, seg_url in enumerate(segment_urls)
@@ -313,7 +315,7 @@ async def download_multipart(
     num_parts: int = 16
 ) -> bool:
     """Downloads a direct file in parallel parts using HTTP Range requests to maximize speed."""
-    connector = get_session_connector(limit=250)
+    connector = get_session_connector(limit=100)
     referer = get_referer_for_url(url)
     headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
     
@@ -441,7 +443,7 @@ async def download_file(
             return True
         logger.warning("Multipart download failed or not supported. Falling back to single-connection download.")
 
-    connector = get_session_connector(limit=250)
+    connector = get_session_connector(limit=100)
     referer = get_referer_for_url(url)
     headers = {"User-Agent": get_random_user_agent(), "Referer": referer}
     if config.PROXY_URL:
