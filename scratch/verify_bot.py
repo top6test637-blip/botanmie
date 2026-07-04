@@ -26,6 +26,7 @@ from app.database.models import BotAdmin
 from app.utils.auth import is_admin
 from app.services.scraper import get_episodes_scraper
 from app.services.anilist import search_anilist, translate_to_english
+from app.utils.match import get_best_slug_match
 
 async def run_proxy_check():
     if config.PROXY_URL:
@@ -104,6 +105,17 @@ async def test_translation():
     if results:
         print(f"Top AniList result title: {results[0]['title_english']} (ID: {results[0]['anilist_id']})")
 
+async def test_slug_matching():
+    print("\n--- TESTING SLUG MATCHING PRIORITIZATION ---")
+    scraper_results = [
+        {"title": "فيلم Hunter x Hunter Movie 2: The Last Mission مترجم", "slug": "hunter-x-hunter-movie-2-the-last-mission"},
+        {"title": "انمي Hunter x Hunter 2011 مترجم", "slug": "hunter-x-hunter-2011"},
+        {"title": "فيلم Hunter x Hunter Movie 1: Phantom Rouge مترجم", "slug": "hunter-x-hunter-movie-1-phantom-rouge"}
+    ]
+    search_title = "Hunter x Hunter"
+    best_slug = get_best_slug_match(scraper_results, search_title)
+    print(f"Search Title: '{search_title}' -> Best Slug Match: '{best_slug}' (Expected: 'hunter-x-hunter-2011')")
+
 async def test_scraper():
     print("\n--- TESTING PAGINATED EPISODES SCRAPER ---")
     slug = "one-piece"
@@ -118,6 +130,7 @@ async def main():
         await run_proxy_check()
         await test_database()
         await test_translation()
+        await test_slug_matching()
         await test_scraper()
         print("\nVerification completed successfully!")
     except Exception as e:

@@ -35,20 +35,21 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
     # Check search cache first
     stmt = select(SearchCache).where(SearchCache.query_text == query)
     res = await db_session.execute(stmt)
-    cached = res.scalar_one_or_none()
+    cached_entries = res.scalars().all()
 
     resolved_anime = []
 
     # If cached and not expired (24h)
-    if cached and (datetime.now(timezone.utc) - cached.created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
-        logger.info(f"وجدت كاش للبحث: '{query}' (معرف أنيليست: {cached.anilist_id})")
-        resolved_anime.append({
-            "anilist_id": cached.anilist_id,
-            "title_english": cached.title_english,
-            "title_romaji": cached.title_romaji,
-            "description": cached.description,
-            "image_url": cached.image_url
-        })
+    if cached_entries and (datetime.now(timezone.utc) - cached_entries[0].created_at) < timedelta(hours=CACHE_EXPIRATION_HOURS):
+        logger.info(f"وجد كاش للبحث: '{query}' يحتوي على {len(cached_entries)} نتائج.")
+        for entry in cached_entries:
+            resolved_anime.append({
+                "anilist_id": entry.anilist_id,
+                "title_english": entry.title_english,
+                "title_romaji": entry.title_romaji,
+                "description": entry.description,
+                "image_url": entry.image_url
+            })
     else:
         logger.info(f"كاش غير متوفر للبحث: '{query}'. جاري الاستعلام من AniList GraphQL...")
         status_msg = await message.answer("🔍 جاري تهيئة البحث باستخدام AniList...")
@@ -81,25 +82,24 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
             else:
                 resolved_anime = anilist_results
             
-            # Cache the top result
-            top_result = resolved_anime[0]
-            if cached:
-                logger.info(f"تحديث الكاش المنتهي للبحث: '{query}'")
-                cached.anilist_id = top_result["anilist_id"]
-                cached.title_english = top_result["title_english"]
-                cached.title_romaji = top_result["title_romaji"]
-                cached.description = top_result["description"]
-                cached.image_url = top_result["image_url"]
-                cached.created_at = datetime.now(timezone.utc)
-            else:
-                logger.info(f"إنشاء كاش جديد للبحث: '{query}'")
+            # Clear old cache for this query first
+            stmt_del = select(SearchCache).where(SearchCache.query_text == query)
+            res_del = await db_session.execute(stmt_del)
+            old_entries = res_del.scalars().all()
+            for old_entry in old_entries:
+                await db_session.delete(old_entry)
+            await db_session.commit()
+            
+            # Cache all resolved results (up to 5)
+            logger.info(f"كاش جديد للبحث '{query}' يحتوي على {len(resolved_anime)} نتائج.")
+            for anime in resolved_anime[:5]:
                 new_cache = SearchCache(
                     query_text=query,
-                    anilist_id=top_result["anilist_id"],
-                    title_english=top_result["title_english"],
-                    title_romaji=top_result["title_romaji"],
-                    description=top_result["description"],
-                    image_url=top_result["image_url"]
+                    anilist_id=anime["anilist_id"],
+                    title_english=anime["title_english"],
+                    title_romaji=anime["title_romaji"],
+                    description=anime["description"],
+                    image_url=anime["image_url"]
                 )
                 db_session.add(new_cache)
             await db_session.commit()
@@ -179,7 +179,8 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
             if not scraper_results:
                 await status_msg.edit_text("❌ لم يتم العثور على هذا الأنمي في خوادم البث المساعدة.")
                 return
-            anime_slug = scraper_results[0]["slug"]
+            from app.utils.match import get_best_slug_match
+            anime_slug = get_best_slug_match(scraper_results, search_title)
 
     if anime_slug:
         # Scrape and cache episodes

@@ -78,7 +78,8 @@ async def process_episode_selection(message: Message, db_session: AsyncSession, 
                     await status_msg.edit_text("❌ لم يتم العثور على هذا الأنمي في خوادم البث المساعدة.")
                     await state.clear()
                     return
-                anime_slug = scraper_results[0]["slug"]
+                from app.utils.match import get_best_slug_match
+                anime_slug = get_best_slug_match(scraper_results, search_title)
             
             logger.info(f"اسم الأنمي اللطيف (Slug) على WitAnime: '{anime_slug}'")
             

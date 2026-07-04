@@ -2,6 +2,7 @@ import os
 import time
 import aiohttp
 import asyncio
+import uuid
 from pathlib import Path
 from typing import Dict, Tuple, Optional
 from urllib.parse import urlparse, parse_qs, urljoin
@@ -82,7 +83,7 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
                             if seg_resp.status == 200:
                                 length = seg_resp.headers.get("Content-Length")
                                 if length:
-                                    seg_data = await seg_resp.read()
+                                    seg_data = await seg_resp.content.read(256)
                                     is_png = seg_data.startswith(b"\x89PNG")
                                     actual_size = int(length) - 252 if is_png else int(length)
                                     total_est = len(segment_urls) * actual_size
@@ -90,7 +91,7 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
                                     return total_est
         except Exception:
             logger.exception("Error in process while estimating HLS playlist size")
-        return 100 * 1024 * 1024
+        return 0
 
     headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
     try:
@@ -120,19 +121,23 @@ async def select_best_quality(qualities: Dict[str, str], requested_quality: str 
     if requested_quality != "auto" and requested_quality in qualities:
         available_qualities = [requested_quality] + [q for q in available_qualities if q != requested_quality]
 
+    resolved_sizes = {}
     connector = get_session_connector(limit=10)
     async with aiohttp.ClientSession(connector=connector) as session:
         for q in available_qualities:
             url = qualities[q]
             size = await get_url_file_size(url, session)
+            resolved_sizes[q] = size
             logger.info(f"Checking quality {q}: Size is {size / (1024*1024):.2f} MB")
             
-            if size <= MAX_TELEGRAM_LOCAL_SIZE:
+            if size > 0 and size <= MAX_TELEGRAM_LOCAL_SIZE:
                 return q, url, size
                 
         lowest_q = available_qualities[-1] if available_qualities else list(qualities.keys())[0]
         url = qualities[lowest_q]
-        size = await get_url_file_size(url, session)
+        size = resolved_sizes.get(lowest_q, 0)
+        if size == 0:
+            size = await get_url_file_size(url, session)
         return lowest_q, url, size
 
 async def download_segment(
@@ -207,7 +212,7 @@ async def download_hls(
                         size_header = get_resp.headers.get("Content-Length")
                         if size_header:
                             first_seg_size = int(size_header)
-                        head_data = await get_resp.read()
+                        head_data = await get_resp.content.read(256)
                         if head_data.startswith(b"\x89PNG"):
                             is_png_wrapped = True
                             logger.info("PNG wrapper signature detected. Segment header stripping active.")
@@ -394,7 +399,8 @@ async def process_and_send_video(
         )
         return
 
-    filename = f"anime_{int(time.time())}_{quality}.mp4"
+    unique_id = f"{message.from_user.id}_{uuid.uuid4().hex[:6]}"
+    filename = f"anime_{unique_id}_{int(time.time())}_{quality}.mp4"
     temp_file_path = config.DOWNLOAD_DIR / filename
     
     try:

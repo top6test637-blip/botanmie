@@ -8,13 +8,17 @@ class SearchCache(Base):
     __tablename__ = "search_cache"
 
     id = Column(Integer, primary_key=True)
-    query_text = Column(String(255), unique=True, nullable=False, index=True)
-    anilist_id = Column(Integer, nullable=False)
+    query_text = Column(String(255), nullable=False, index=True)
+    anilist_id = Column(Integer, nullable=False, index=True)
     title_english = Column(String(500), nullable=True)
     title_romaji = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
     image_url = Column(String(1000), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('query_text', 'anilist_id', name='_query_anilist_uc'),
+    )
 
 class EpisodeCache(Base):
     """Caches episode lists for resolved anime."""
