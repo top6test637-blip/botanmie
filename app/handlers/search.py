@@ -350,11 +350,16 @@ async def render_episode_keyboard(
     inline_keyboard = []
     total_eps = len(cached_episodes)
     
+    import html
+    poster_prefix = f'<a href="{cache_entry.image_url}">&#8203;</a>' if cache_entry.image_url else ""
+    safe_title = html.escape(title)
+    safe_desc = html.escape(cache_entry.description[:250] + '...') if cache_entry.description else 'لا يوجد'
+
     if total_eps == 0:
         inline_keyboard.append([InlineKeyboardButton(text="❌ لا توجد حلقات متوفرة", callback_data="none")])
         text = (
-            f"**الأنمي المختار**: {title}\n"
-            f"القصة: {cache_entry.description[:250] + '...' if cache_entry.description else 'لا يوجد'}\n\n"
+            f"{poster_prefix}🎬 <b>الأنمي المختار:</b> {safe_title}\n"
+            f"📖 <b>القصة:</b> {safe_desc}\n\n"
             f"عذراً، لم يتم العثور على حلقات متوفرة حالياً لهذا الأنمي."
         )
     elif total_eps <= 24:
@@ -369,8 +374,8 @@ async def render_episode_keyboard(
             inline_keyboard.append(row)
             
         text = (
-            f"**الأنمي المختار**: {title}\n"
-            f"القصة: {cache_entry.description[:250] + '...' if cache_entry.description else 'لا يوجد'}\n\n"
+            f"{poster_prefix}🎬 <b>الأنمي المختار:</b> {safe_title}\n"
+            f"📖 <b>القصة:</b> {safe_desc}\n\n"
             f"اختر رقم الحلقة المطلوبة من الأزرار بالأسفل للتحميل والمشاهدة:"
         )
     else:
@@ -392,8 +397,8 @@ async def render_episode_keyboard(
                 inline_keyboard.append(row)
                 
             text = (
-                f"**الأنمي المختار**: {title}\n"
-                f"القصة: {cache_entry.description[:250] + '...' if cache_entry.description else 'لا يوجد'}\n\n"
+                f"{poster_prefix}🎬 <b>الأنمي المختار:</b> {safe_title}\n"
+                f"📖 <b>القصة:</b> {safe_desc}\n\n"
                 f"الأنمي يحتوي على {total_eps} حلقة. يرجى اختيار فئة الحلقات المطلوبة:"
             )
         else:
@@ -418,7 +423,7 @@ async def render_episode_keyboard(
             ])
             
             text = (
-                f"**الأنمي المختار**: {title}\n"
+                f"{poster_prefix}🎬 <b>الأنمي المختار:</b> {safe_title}\n"
                 f"الحلقات من {start_ep} إلى {end_ep}:\n\n"
                 f"اختر الحلقة المطلوبة:"
             )
@@ -433,37 +438,29 @@ async def render_episode_keyboard(
     
     if message_id:
         try:
-            # Try editing as caption first (for photo messages)
+            # Try editing text message directly with HTML zero-width space poster preview
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=text,
+                reply_markup=markup,
+                parse_mode="HTML"
+            )
+        except TelegramBadRequest:
             try:
                 await bot.edit_message_caption(
                     chat_id=chat_id,
                     message_id=message_id,
                     caption=text,
                     reply_markup=markup,
-                    parse_mode="Markdown"
+                    parse_mode="HTML"
                 )
-            except TelegramBadRequest as e:
-                if "there is no caption in the message" in str(e).lower() or "message is not modified" in str(e).lower():
-                    # Fallback: edit as text message
-                    await bot.edit_message_text(
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        text=text,
-                        reply_markup=markup,
-                        parse_mode="Markdown"
-                    )
-                else:
-                    raise
-        except TelegramBadRequest:
-            # Final fallback: send a new message
-            await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="Markdown")
+            except Exception:
+                await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="HTML")
         except Exception:
-            await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="Markdown")
+            await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="HTML")
     else:
-        if cache_entry.image_url:
-            await bot.send_photo(chat_id=chat_id, photo=cache_entry.image_url, caption=text, reply_markup=markup, parse_mode="Markdown")
-        else:
-            await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="Markdown")
+        await bot.send_message(chat_id=chat_id, text=text, reply_markup=markup, parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("ep_block:"))

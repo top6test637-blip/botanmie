@@ -178,8 +178,11 @@ async def webapp_episodes(anilist_id: int):
         from app.handlers.search import parse_ep_num
         episodes.sort(key=lambda x: parse_ep_num(x.ep_number))
         
-        # Load HTML template file
-        template_path = os.path.join(os.path.dirname(__file__), "app", "templates", "episodes.html")
+        # Load HTML template file securely
+        base_dir = Path(__file__).resolve().parent
+        template_path = base_dir / "app" / "templates" / "episodes.html"
+        if not template_path.exists():
+            template_path = Path("/app/app/templates/episodes.html")
 
         with open(template_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -208,7 +211,11 @@ async def webapp_qualities(db_cache_id: int, anilist_id: int, ep_number: str):
         
         qualities = dl_cache.qualities if dl_cache else {}
         
-        template_path = os.path.join(os.path.dirname(__file__), "app", "templates", "qualities.html")
+        base_dir = Path(__file__).resolve().parent
+        template_path = base_dir / "app" / "templates" / "qualities.html"
+        if not template_path.exists():
+            template_path = Path("/app/app/templates/qualities.html")
+
         with open(template_path, "r", encoding="utf-8") as f:
             content = f.read()
             

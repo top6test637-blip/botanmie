@@ -52,7 +52,11 @@ async def get_thumbnail_input(bot: Bot) -> Optional[FSInputFile]:
     return None
 
 async def get_video_thumbnail(bot: Bot, db_session_factory, anilist_id: int) -> Optional[FSInputFile]:
-    """Retrieves AniList poster image as video cover art, falling back to custom admin thumbnail."""
+    """Retrieves custom admin thumbnail first, or falls back to AniList poster image as video cover art."""
+    admin_thumb = await get_thumbnail_input(bot)
+    if admin_thumb:
+        return admin_thumb
+
     try:
         from app.database.models import SearchCache
         async with db_session_factory() as session:
@@ -76,7 +80,7 @@ async def get_video_thumbnail(bot: Bot, db_session_factory, anilist_id: int) -> 
     except Exception as e:
         logger.warning(f"Failed to fetch AniList cover image thumbnail: {e}")
         
-    return await get_thumbnail_input(bot)
+    return None
 
 async def save_telegram_file_cache(db_session_factory, anilist_id: int, ep_number: str, quality: str, file_id: str):
     """Persists Telegram file_id to TelegramFileCache table for zero-second instant delivery after restarts."""

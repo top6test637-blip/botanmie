@@ -122,8 +122,8 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
                                     total_est = len(segment_urls) * actual_size
                                     logger.info(f"HLS size estimation: {len(segment_urls)} segments * {actual_size} bytes = {total_est / (1024*1024):.2f} MB")
                                     return total_est
-        except Exception:
-            logger.exception("Error in process while estimating HLS playlist size")
+        except (asyncio.CancelledError, Exception) as e:
+            logger.warning(f"Error estimating HLS playlist size for {url}: {e}")
         return 0
 
     referer = get_referer_for_url(url)
@@ -139,8 +139,8 @@ async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
             length = response.headers.get("Content-Length")
             if length:
                 return int(length)
-    except Exception:
-        logger.exception(f"Error in process while fetching file size from {url}")
+    except (asyncio.CancelledError, Exception) as e:
+        logger.warning(f"File size lookup skipped/cancelled for {url}: {e}")
         
     return 0
 
