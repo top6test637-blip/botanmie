@@ -28,14 +28,16 @@ def make_hashtag(title_str: str) -> str:
     return cleaned
 
 async def get_thumbnail_input(bot: Bot) -> Optional[FSInputFile]:
-    """Helper to retrieve and download custom thumbnail from Telegram to local file."""
+    """Helper to retrieve and download custom thumbnail from Telegram to local file as active FSInputFile object."""
     from app.utils.settings import get_setting
     file_id = await get_setting("custom_thumb_file_id")
     if not file_id:
         return None
         
-    local_path = config.DOWNLOAD_DIR / "custom_thumb.jpg"
-    if local_path.exists():
+    sanitized_id = re.sub(r'[^a-zA-Z0-9]', '_', str(file_id))[:15]
+    local_path = config.DOWNLOAD_DIR / f"custom_thumb_{sanitized_id}.jpg"
+    
+    if local_path.exists() and local_path.stat().st_size > 0:
         return FSInputFile(str(local_path))
         
     try:
@@ -44,7 +46,8 @@ async def get_thumbnail_input(bot: Bot) -> Optional[FSInputFile]:
         if file_info and file_info.file_path:
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
             await bot.download_file(file_info.file_path, str(local_path))
-            if local_path.exists():
+            if local_path.exists() and local_path.stat().st_size > 0:
+                logger.info(f"Custom thumbnail successfully downloaded to: {local_path}")
                 return FSInputFile(str(local_path))
     except Exception as e:
         logger.warning(f"Failed to download custom thumbnail from Telegram: {e}")

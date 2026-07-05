@@ -794,9 +794,9 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
         except Exception:
             pass
             
-    # Handle Streamwish/Hlswish mirrors (which change domains frequently)
-    wish_domains = ["streamwish", "hlswish", "stwish", "ninjastr", "awish", "wishembed", "wishfast", "closwish", "cybervynx", "swdyu", "flaswish", "sfastwish", "obeywish", "jodwish", "embedwish", "cdnwish", "strwish", "iplayerhls", "suzihazarpc"]
-    if any(d in embed_url for d in wish_domains):
+    # Handle Universal Streamwish/Playerwish mirrors (matching *wish* or clone player domains)
+    wish_domains = ["wish", "streamwish", "hlswish", "stwish", "ninjastr", "awish", "wishembed", "wishfast", "closwish", "cybervynx", "swdyu", "flaswish", "sfastwish", "obeywish", "jodwish", "embedwish", "cdnwish", "strwish", "iplayerhls", "suzihazarpc", "filelions"]
+    if "wish" in embed_url.lower() or any(d in embed_url.lower() for d in wish_domains):
         video_id = None
         for path_prefix in ["/e/", "/watch/", "/embed/", "/v/"]:
             if path_prefix in embed_url:
@@ -806,7 +806,7 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
                 except Exception:
                     pass
         if video_id:
-            # We construct fallback URLs using multiple known active domains
+            # Construct fallback URLs using multiple active player wish domains
             target_urls = [
                 f"https://hlswish.com/e/{video_id}",
                 f"https://swdyu.com/e/{video_id}",
@@ -819,17 +819,16 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
                 f"https://strwish.xyz/e/{video_id}",
                 f"https://awish.pro/e/{video_id}",
                 f"https://streamwish.to/e/{video_id}",
-                embed_url # Include original as fallback
+                embed_url # Original URL fallback
             ]
         
     for url in target_urls:
         logger.info(f"Attempting to resolve embed playlist from: {url}")
         try:
-            async with session.get(url, headers=headers, ssl=False, timeout=10) as response:
+            async with session.get(url, headers=get_browser_headers(url), ssl=False, timeout=10) as response:
                 if response.status != 200:
                     continue
                 text = await response.text()
-                # Unescape slashes for JSON-serialized URLs (e.g. \/ to /)
                 text = text.replace("\\/", "/")
                 
                 # Check for direct mp4 match first
@@ -841,17 +840,21 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
                     logger.info(f"Resolved direct MP4 stream: {mp4_url}")
                     return mp4_url
                 
-                # Check if page is Dean Edwards packed
+                # Check for Dean Edwards packed JS script in Playerwish / Streamwish layout
                 script_match = re.search(r"eval\(function\(p,a,c,k,e,d\).*?\.split\(['\"]\|['\"]\)\)\)", text, re.DOTALL)
                 if script_match:
                     unpacked = unpack_dean_edwards(script_match.group(0))
                     m3u8_matches = re.findall(r'https?://[^\s"\']+\.m3u8[^\s"\']*', unpacked)
                     if m3u8_matches:
                         m3u8_url = m3u8_matches[0]
-                        logger.info(f"Resolved streamwish mirror HLS stream: {m3u8_url}")
+                        logger.info(f"Resolved streamwish mirror HLS stream from unpacked JS: {m3u8_url}")
                         return m3u8_url
+                    direct_file = re.search(r'file\s*:\s*["\'](https?://[^"\']+)["\']', unpacked)
+                    if direct_file:
+                        logger.info(f"Resolved streamwish direct file from unpacked JS: {direct_file.group(1)}")
+                        return direct_file.group(1)
                 
-                # Regular regex search inside non-packed body (outside of if script_match block)
+                # Regular regex search inside non-packed body
                 match = re.search(r'const\s+src\s*=\s*["\']([^"\']+\.m3u8[^"\']*)["\']', text)
                 if not match:
                     match = re.search(r'src\s*:\s*["\']([^"\']+\.m3u8[^"\']*)["\']', text)
@@ -859,7 +862,6 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
                     match = re.search(r'["\']([^"\']+\.m3u8[^"\']*)["\']', text)
                 if match:
                     m3u8_url = match.group(1)
-                    # Validate: must start with http and not be a JSON blob
                     if m3u8_url.startswith('http') and len(m3u8_url) < 2000:
                         logger.info(f"Resolved master .m3u8 playlist: {m3u8_url}")
                         return m3u8_url
