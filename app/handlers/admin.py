@@ -106,61 +106,23 @@ async def handle_custom_thumbnail(message: Message, db_session: AsyncSession):
         await message.answer("❌ عذراً، لا تملك الصلاحية لتغيير الصورة المصغرة للفيديو.")
         return
         
-    status_msg = await message.answer("🔄 جاري تنزيل الصورة من خادم تلغرام السحابي وتحديث الخلفية...")
-    
-    # Ensure app/data directory exists
-    data_dir = Path(__file__).parent.parent / "data"
-    data_dir.mkdir(exist_ok=True)
-    thumb_path = data_dir / "custom_thumb.jpg"
-    thumb_id_path = data_dir / "custom_thumb_id.txt"
+    status_msg = await message.answer("🔄 جاري حفظ معرف الصورة المصغرة في قاعدة البيانات...")
     
     try:
         photo = message.photo[-1]
         file_id = photo.file_id
-        bot_token = message.bot.token
         
-        import aiohttp
-        # 1. Fetch file info from official cloud Telegram API
-        get_file_url = f"https://api.telegram.org/bot{bot_token}/getFile?file_id={file_id}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(get_file_url, ssl=False, timeout=15) as resp:
-                if resp.status != 200:
-                    await status_msg.edit_text(f"❌ فشل جلب معلومات الملف من تلغرام السحابي. كود الحالة: {resp.status}")
-                    return
-                file_info = await resp.json()
-                
-        if not file_info.get("ok"):
-            await status_msg.edit_text("❌ رد غير صالح من خادم تلغرام السحابي.")
-            return
-            
-        file_path = file_info["result"]["file_path"]
+        # Save it in database!
+        from app.utils.settings import set_setting, delete_setting
+        await set_setting("custom_thumb_file_id", file_id)
+        await delete_setting("custom_thumb_url")
         
-        # 2. Download the image bytes from official cloud file server
-        download_url = f"https://api.telegram.org/file/bot{bot_token}/{file_path}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(download_url, ssl=False, timeout=30) as resp:
-                if resp.status == 200:
-                    image_bytes = await resp.read()
-                    with open(thumb_path, "wb") as f:
-                        f.write(image_bytes)
-                        
-                    # Save it in database!
-                    from app.utils.settings import set_setting, delete_setting
-                    await set_setting("custom_thumb_file_id", file_id)
-                    await delete_setting("custom_thumb_url")
-                    
-                    # Clean up custom_thumb_id.txt if it exists to avoid conflicts
-                    if thumb_id_path.exists():
-                        thumb_id_path.unlink()
-                        
-                    logger.info(f"Custom video thumbnail updated by Admin (User ID: {message.from_user.id}) via sent Photo message.")
-                    await status_msg.edit_text("✅ تم تحديث الخلفية الافتراضية للفيديوهات بنجاح من الصورة المرسلة!")
-                else:
-                    await status_msg.edit_text(f"❌ فشل تنزيل ملف الصورة من خادم تلغرام. كود الحالة: {resp.status}")
+        logger.info(f"Custom background photo set by Admin {message.from_user.id} to file_id {file_id} via direct photo upload.")
+        await status_msg.edit_text("✅ تم تحديث الخلفية الافتراضية للفيديوهات بنجاح من الصورة المرسلة!")
     except Exception as e:
-        logger.exception("Error downloading custom thumbnail from Telegram cloud API")
+        logger.exception("Error processing background photo")
         import html
-        await status_msg.edit_text(f"❌ فشل تحديث الصورة المصغرة: {html.escape(str(e))}")
+        await status_msg.edit_text(f"❌ فشل تحديث الصورة: {html.escape(str(e))}")
 
 @router.message(Command("setthumb"))
 async def handle_set_thumbnail_url(message: Message, db_session: AsyncSession):
@@ -180,13 +142,7 @@ async def handle_set_thumbnail_url(message: Message, db_session: AsyncSession):
         )
         return
         
-    status_msg = await message.answer("🔄 جاري تحميل وحفظ الصورة المصغرة من الرابط...")
-    
-    # Ensure app/data directory exists
-    data_dir = Path(__file__).parent.parent / "data"
-    data_dir.mkdir(exist_ok=True)
-    thumb_path = data_dir / "custom_thumb.jpg"
-    thumb_id_path = data_dir / "custom_thumb_id.txt"
+    status_msg = await message.answer("🔄 جاري التحقق من الصورة وتوليد معرف التلغرام السحابي...")
     
     target_url = args
     if "t.me/" in args:
@@ -219,31 +175,22 @@ async def handle_set_thumbnail_url(message: Message, db_session: AsyncSession):
             return
             
     try:
-        import aiohttp
-        async with aiohttp.ClientSession() as session:
-            async with session.get(target_url, ssl=False, timeout=30) as resp:
-                if resp.status == 200:
-                    image_bytes = await resp.read()
-                    with open(thumb_path, "wb") as f:
-                        f.write(image_bytes)
-                    
-                    # Save it in database!
-                    from app.utils.settings import set_setting, delete_setting
-                    await set_setting("custom_thumb_url", target_url)
-                    await delete_setting("custom_thumb_file_id")
-                    
-                    # Clean up custom_thumb_id.txt if it exists to avoid conflicts
-                    if thumb_id_path.exists():
-                        thumb_id_path.unlink()
-                        
-                    logger.info(f"Custom video thumbnail updated by Admin (User ID: {message.from_user.id}) via URL: {target_url}")
-                    await status_msg.edit_text("✅ تم تحميل وتحديث الصورة المصغرة الافتراضية للفيديوهات بنجاح.")
-                else:
-                    await status_msg.edit_text(f"❌ فشل تحميل الصورة، رمز استجابة السيرفر: {resp.status}")
+        # Send the photo to chat_id using target_url to let Telegram cache it and give us a file_id
+        sent_msg = await message.bot.send_photo(chat_id=message.chat.id, photo=target_url)
+        file_id = sent_msg.photo[-1].file_id
+        await sent_msg.delete()
+        
+        # Save it in database!
+        from app.utils.settings import set_setting, delete_setting
+        await set_setting("custom_thumb_file_id", file_id)
+        await delete_setting("custom_thumb_url")
+        
+        logger.info(f"Custom video thumbnail URL {target_url} mapped to file_id {file_id} by Admin {message.from_user.id}")
+        await status_msg.edit_text("✅ تم تحديث وتعيين الصورة المصغرة الافتراضية بنجاح عبر معرف التلغرام السحابي!")
     except Exception as e:
-        logger.exception("Error downloading custom thumbnail from URL")
+        logger.exception("Error setting custom thumbnail from URL")
         import html
-        await status_msg.edit_text(f"❌ فشل تحميل الصورة: {html.escape(str(e))}")
+        await status_msg.edit_text(f"❌ فشل تعيين الصورة من الرابط: {html.escape(str(e))}")
 
 @router.message(Command("post_episode"))
 async def cmd_post_episode(message: Message, db_session: AsyncSession):
@@ -424,6 +371,81 @@ async def cmd_post_episode(message: Message, db_session: AsyncSession):
         
     except Exception as e:
         logger.exception("Error broadcasting episode to channel")
+        import html
+        await status_msg.edit_text(f"❌ حدث خطأ أثناء البث: {html.escape(str(e))}")
+
+
+@router.message(Command("broadcast_ep"))
+async def cmd_broadcast_ep(message: Message, db_session: AsyncSession):
+    # 1. Auth check
+    authorized = await is_admin(message.from_user.id, db_session)
+    if not authorized:
+        await message.answer("❌ عذراً، هذا الأمر مخصص للمسؤولين فقط.")
+        return
+        
+    # 2. Channel config check
+    if not config.CHANNEL_USERNAME:
+        await message.answer("❌ يرجى تهيئة معرف القناة `CHANNEL_USERNAME` أولاً في ملف الـ `.env` لتتمكن من استخدام البث.")
+        return
+        
+    # 3. Parse arguments
+    args = message.text.replace("/broadcast_ep", "").strip().split()
+    if len(args) < 3:
+        await message.answer(
+            "⚠️ <b>طريقة الاستخدام:</b>\n"
+            "<code>/broadcast_ep [Anime Title] [Ep Number] [Link]</code>\n\n"
+            "مثال:\n"
+            "<code>/broadcast_ep Solo Leveling 13 https://google.com</code>",
+            parse_mode="HTML"
+        )
+        return
+        
+    link = args[-1]
+    ep_num = args[-2]
+    anime_title = " ".join(args[:-2])
+    
+    status_msg = await message.answer(f"🔍 جاري التحضير لبث الحلقة {ep_num} من الأنمي '{anime_title}'...")
+    
+    try:
+        from app.services.anilist import search_anilist
+        
+        # Search AniList for high-res poster
+        anilist_results = await search_anilist(anime_title)
+        image_url = None
+        if anilist_results:
+            image_url = anilist_results[0].get("image_url")
+            
+        caption = (
+            f"📢 <b>حلقة جديدة مضافة! | New Episode Added</b> 🎬\n\n"
+            f"🎬 <b>الأنمي:</b> <code>{anime_title}</code>\n"
+            f"🔢 <b>الحلقة:</b> <code>{ep_num}</code>\n\n"
+            f"🎥 <b>مشاهدة ممتعة!</b> ✨🍿"
+        )
+        
+        # Button pointing to specific episode link
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="شاهد الآن 📺", url=link)]
+        ])
+        
+        if image_url:
+            await message.bot.send_photo(
+                chat_id=config.CHANNEL_USERNAME,
+                photo=image_url,
+                caption=caption,
+                reply_markup=markup,
+                parse_mode="HTML"
+            )
+        else:
+            await message.bot.send_message(
+                chat_id=config.CHANNEL_USERNAME,
+                text=caption,
+                reply_markup=markup,
+                parse_mode="HTML"
+            )
+            
+        await status_msg.edit_text(f"✅ تم البث ونشر الحلقة بنجاح في القناة: {config.CHANNEL_USERNAME}")
+    except Exception as e:
+        logger.exception("Error broadcasting episode via /broadcast_ep")
         import html
         await status_msg.edit_text(f"❌ حدث خطأ أثناء البث: {html.escape(str(e))}")
 
@@ -694,41 +716,15 @@ async def process_admin_bg_photo(message: Message, db_session: AsyncSession, sta
     photo = message.photo[-1]
     file_id = photo.file_id
     
-    status_msg = await message.answer("🔄 جاري تحميل وحفظ الصورة المصغرة عبر الاتصال المباشر...")
+    status_msg = await message.answer("🔄 جاري حفظ معرف الصورة المصغرة في قاعدة البيانات...")
     
-    import aiohttp
     try:
-        data_dir = Path(__file__).parent.parent / "data"
-        data_dir.mkdir(exist_ok=True)
-        thumb_path = data_dir / "custom_thumb.jpg"
-        thumb_id_path = data_dir / "custom_thumb_id.txt"
-        
-        get_file_url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/getFile?file_id={file_id}"
-        async with aiohttp.ClientSession() as session:
-            async with session.get(get_file_url) as resp:
-                if resp.status == 200:
-                    res_json = await resp.json()
-                    if res_json.get("ok"):
-                        file_path = res_json["result"]["file_path"]
-                        download_url = f"https://api.telegram.org/file/bot{config.BOT_TOKEN}/{file_path}"
-                        async with session.get(download_url) as img_resp:
-                            if img_resp.status == 200:
-                                image_bytes = await img_resp.read()
-                                with open(thumb_path, "wb") as f:
-                                    f.write(image_bytes)
-                                    
-                                # Save it in database!
-                                from app.utils.settings import set_setting, delete_setting
-                                await set_setting("custom_thumb_file_id", file_id)
-                                await delete_setting("custom_thumb_url")
-                                    
-                                with open(thumb_id_path, "w") as f_id:
-                                    f_id.write(file_id)
-                                    
-                                await status_msg.edit_text("✅ تم تحديث خلفية الفيديوهات الافتراضية بنجاح.")
-                                await state.clear()
-                                return
-        await status_msg.edit_text("❌ فشل تحميل الصورة من خوادم تيليجرام.")
+        from app.utils.settings import set_setting, delete_setting
+        await set_setting("custom_thumb_file_id", file_id)
+        await delete_setting("custom_thumb_url")
+            
+        await status_msg.edit_text("✅ تم تحديث خلفية الفيديوهات الافتراضية بنجاح.")
+        await state.clear()
     except Exception as e:
         logger.exception("Error processing background photo")
         import html

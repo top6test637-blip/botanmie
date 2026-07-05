@@ -107,6 +107,8 @@
         const dbCacheId = "{{ db_cache_id }}";
         const anilistId = "{{ anilist_id }}";
         const epNumber = "{{ ep_number }}";
+        const urlParams = new URLSearchParams(window.location.search);
+        const messageId = urlParams.get('message_id');
 
         async function selectQuality(quality) {
             document.getElementById('loader').style.display = 'block';
@@ -127,7 +129,8 @@
                         db_cache_id: parseInt(dbCacheId),
                         anilist_id: parseInt(anilistId),
                         ep_number: epNumber,
-                        quality: quality
+                        quality: quality,
+                        message_id: messageId ? parseInt(messageId) : null
                     })
                 });
                 

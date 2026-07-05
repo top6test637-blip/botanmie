@@ -79,6 +79,8 @@
         webapp.expand();
 
         const anilistId = "{{ anilist_id }}";
+        const urlParams = new URLSearchParams(window.location.search);
+        const messageId = urlParams.get('message_id');
 
         async function selectEpisode(epNum) {
             document.getElementById('loader').style.display = 'block';
@@ -97,7 +99,8 @@
                         init_data: initData,
                         user_id: user?.id,
                         anilist_id: parseInt(anilistId),
-                        ep_number: epNum
+                        ep_number: epNum,
+                        message_id: messageId ? parseInt(messageId) : null
                     })
                 });
                 

@@ -324,14 +324,17 @@ async def execute_queued_task(
     bot_username = f"@{bot_info.username}" if bot_info else ""
     
     size_mb = size / (1024 * 1024)
+    chan = config.CHANNEL_USERNAME if config.CHANNEL_USERNAME else (f"@{bot_info.username}" if bot_info else "")
+    if chan and not chan.startswith("@"):
+        chan = "@" + chan
+        
     caption = (
         f"🎬 **{anime_title}**\n"
-        f"🔢 **الحلقة:** `{episode_num}`\n"
-        f"⏱️ **المدة:** `{duration_str or '24 دقيقة'}`\n"
-        f"⚙️ **الجودة:** `{selected_quality}`\n"
-        f"💾 **الحجم:** `{size_mb:.1f} ميجابايت`\n\n"
-        f"🎥 **مشاهدة ممتعة!** ✨🍿\n\n"
-        f"📢 **عبر البوت:** {bot_username}"
+        f"🔢 **الحلقة:** {episode_num}\n"
+        f"⚙️ **الجودة:** {selected_quality}\n"
+        f"💾 **الحجم:** {size_mb:.1f} MB\n\n"
+        f"🎥 **مشاهدة ممتعة!** ✨🍿\n"
+        f"📢 **القناة:** {chan}"
     )
 
     # If it is a Telegram file ID
@@ -341,9 +344,10 @@ async def execute_queued_task(
             try: await bot.delete_message(chat_id=chat_id, message_id=status_msg_id)
             except Exception: pass
         
-        # Check custom thumbnail File Path
-        thumb_path = Path(__file__).parent.parent / "data" / "custom_thumb.jpg"
-        thumb_input = FSInputFile(str(thumb_path)) if thumb_path.exists() else None
+        # Retrieve custom thumbnail File ID from settings
+        from app.utils.settings import get_setting
+        thumb_file_id = await get_setting("custom_thumb_file_id")
+        thumb_input = thumb_file_id if thumb_file_id else None
         
         await bot.send_video(
             chat_id=chat_id,
@@ -473,8 +477,9 @@ async def execute_queued_task(
             except Exception: pass
 
         video_file = FSInputFile(str(temp_file_path))
-        thumb_path = Path(__file__).parent.parent / "data" / "custom_thumb.jpg"
-        thumb_input = FSInputFile(str(thumb_path)) if thumb_path.exists() else None
+        from app.utils.settings import get_setting
+        thumb_file_id = await get_setting("custom_thumb_file_id")
+        thumb_input = thumb_file_id if thumb_file_id else None
 
         sent_msg = await bot.send_video(
             chat_id=chat_id,

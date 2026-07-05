@@ -166,12 +166,14 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
     if title.startswith("WITANIME:"):
         title = cache_entry.title_english
 
-    status_msg = await callback.message.answer("🔍 جاري جلب قائمة الحلقات...")
-    # Delete the search results message to keep chat clean
+    # Instead of deleting and answering, we edit callback.message in-place to loading state
     try:
-        await callback.bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
-    except Exception:
-        pass
+        await callback.message.edit_text("🔍 جاري جلب قائمة الحلقات...")
+    except TelegramBadRequest:
+        try:
+            await callback.message.edit_caption(caption="🔍 جاري جلب قائمة الحلقات...")
+        except Exception:
+            pass
     
     anime_slug = None
     if cache_entry.title_romaji.startswith("WITANIME:"):
@@ -217,7 +219,13 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
                     scraper_results = await search_anime_scraper(fallback_2)
                     
             if not scraper_results:
-                await status_msg.edit_text("❌ لم يتم العثور على هذا الأنمي في خوادم البث المساعدة.")
+                try:
+                    await callback.message.edit_text("❌ لم يتم العثور على هذا الأنمي في خوادم البث المساعدة.")
+                except TelegramBadRequest:
+                    try:
+                        await callback.message.edit_caption(caption="❌ لم يتم العثور على هذا الأنمي في خوادم البث المساعدة.")
+                    except Exception:
+                        pass
                 return
                 
             anime_slug = get_best_slug_match(scraper_results, matched_query)
@@ -227,7 +235,13 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
         # Scrape and cache episodes
         scraped_data = await get_episodes_scraper(anime_slug)
         if not scraped_data or not scraped_data.get("episodes"):
-            await status_msg.edit_text("❌ فشل في جلب قائمة الحلقات من سيرفر البث المساعد.")
+            try:
+                await callback.message.edit_text("❌ فشل في جلب قائمة الحلقات من سيرفر البث المساعد.")
+            except TelegramBadRequest:
+                try:
+                    await callback.message.edit_caption(caption="❌ فشل في جلب قائمة الحلقات من سيرفر البث المساعد.")
+                except Exception:
+                    pass
             return
             
         episodes_list = scraped_data["episodes"]
@@ -270,10 +284,14 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
     cached_episodes = res_eps.scalars().all()
 
     if not cached_episodes:
-        await status_msg.edit_text("❌ فشل في تحميل الحلقات من قاعدة البيانات.")
+        try:
+            await callback.message.edit_text("❌ فشل في تحميل الحلقات من قاعدة البيانات.")
+        except TelegramBadRequest:
+            try:
+                await callback.message.edit_caption(caption="❌ فشل في تحميل الحلقات من قاعدة البيانات.")
+            except Exception:
+                pass
         return
-
-    await callback.bot.delete_message(chat_id=callback.message.chat.id, message_id=status_msg.message_id)
     
     # Store details in FSM context
     await state.update_data(
@@ -328,6 +346,8 @@ async def render_episode_keyboard(
     from config import config
     from aiogram.types import WebAppInfo
     webapp_url = f"{config.WEBAPP_BASE_URL}/webapp/episodes?anilist_id={anilist_id}"
+    if message_id:
+        webapp_url += f"&message_id={message_id}"
     
     inline_keyboard = [
         [InlineKeyboardButton(text="📺 اختر الحلقة", web_app=WebAppInfo(url=webapp_url))],
@@ -451,7 +471,8 @@ async def handle_sel_ep_click(callback: CallbackQuery, db_session: AsyncSession)
         play_url=ep_entry.play_url,
         anime_title=title,
         duration=duration,
-        db_session=db_session
+        db_session=db_session,
+        message_id=callback.message.message_id
     )
 
 @router.callback_query(F.data.startswith("fav_add:"))

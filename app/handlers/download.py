@@ -187,11 +187,40 @@ async def prompt_quality_selection(
         qualities = cached_dl.qualities
         db_cache_id = cached_dl.id
     else:
-        status_msg = await bot.send_message(chat_id, "🔄 جاري استخراج روابط التحميل المباشرة للحلقة...")
+        status_msg_id = None
+        if message_id:
+            try:
+                await bot.edit_message_text(
+                    "🔄 جاري استخراج روابط التحميل المباشرة للحلقة...",
+                    chat_id=chat_id,
+                    message_id=message_id
+                )
+                status_msg_id = message_id
+            except TelegramBadRequest:
+                try:
+                    await bot.edit_message_caption(
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        caption="🔄 جاري استخراج روابط التحميل المباشرة للحلقة..."
+                    )
+                    status_msg_id = message_id
+                except Exception:
+                    pass
+        
+        if not status_msg_id:
+            status_msg = await bot.send_message(chat_id, "🔄 جاري استخراج روابط التحميل المباشرة للحلقة...")
+            status_msg_id = status_msg.message_id
+            
         scraped_links = await get_download_links_scraper(play_url)
         
         if not scraped_links:
-            await bot.edit_message_text("❌ فشل في استخراج روابط التحميل لهذه الحلقة. يرجى المحاولة لاحقاً.", chat_id=chat_id, message_id=status_msg.message_id)
+            try:
+                await bot.edit_message_text("❌ فشل في استخراج روابط التحميل لهذه الحلقة. يرجى المحاولة لاحقاً.", chat_id=chat_id, message_id=status_msg_id)
+            except TelegramBadRequest:
+                try:
+                    await bot.edit_message_caption(chat_id=chat_id, message_id=status_msg_id, caption="❌ فشل في استخراج روابط التحميل لهذه الحلقة. يرجى المحاولة لاحقاً.")
+                except Exception:
+                    pass
             return
             
         qualities = scraped_links
@@ -211,14 +240,19 @@ async def prompt_quality_selection(
             db_session.add(new_dl)
             await db_session.commit()
             db_cache_id = new_dl.id
-        try:
-            await bot.delete_message(chat_id, status_msg.message_id)
-        except Exception:
-            pass
+            
+        # Only delete status_msg if we created a new message
+        if status_msg_id != message_id:
+            try:
+                await bot.delete_message(chat_id, status_msg_id)
+            except Exception:
+                pass
             
     from config import config
     from aiogram.types import WebAppInfo
     webapp_url = f"{config.WEBAPP_BASE_URL}/webapp/qualities?db_cache_id={db_cache_id}&anilist_id={anilist_id}&ep_number={ep_number}"
+    if message_id:
+        webapp_url += f"&message_id={message_id}"
     
     keyboard_buttons = [
         [InlineKeyboardButton(text="⚙️ اختر الجودة", web_app=WebAppInfo(url=webapp_url))],
@@ -245,8 +279,18 @@ async def prompt_quality_selection(
                     parse_mode="Markdown"
                 )
                 return
-            except TelegramBadRequest:
-                pass
+            except TelegramBadRequest as e:
+                if "there is no caption" in str(e).lower() or "message is not modified" in str(e).lower() or "can't edit" in str(e).lower():
+                    await bot.edit_message_caption(
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        caption=quality_text,
+                        reply_markup=markup,
+                        parse_mode="Markdown"
+                    )
+                    return
+                else:
+                    raise
         except Exception:
             pass
     
