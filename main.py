@@ -170,77 +170,82 @@ class WebAppQualityPayload(BaseModel):
 
 @app.get("/webapp/episodes", response_class=HTMLResponse)
 async def webapp_episodes(anilist_id: int):
-    # Load episodes list from DB
-    async with AsyncSessionLocal() as db_session:
-        stmt = select(EpisodeCache).where(EpisodeCache.anilist_id == anilist_id)
-        res = await db_session.execute(stmt)
-        episodes = res.scalars().all()
-        
-        # Parse episodes using custom float sort to keep it in order
-        from app.handlers.search import parse_ep_num
-        episodes.sort(key=lambda x: parse_ep_num(x.ep_number))
-        
-        # Load HTML template file securely
-        base_dir = Path(__file__).resolve().parent
-        template_path = base_dir / "app" / "templates" / "episodes.html"
-        if not template_path.exists():
-            template_path = Path("/app/app/templates/episodes.html")
+    try:
+        async with AsyncSessionLocal() as db_session:
+            stmt = select(EpisodeCache).where(EpisodeCache.anilist_id == anilist_id)
+            res = await db_session.execute(stmt)
+            episodes = list(res.scalars().all())
+            
+            # Parse episodes using custom float sort safely
+            from app.handlers.search import parse_ep_num
+            try:
+                episodes.sort(key=lambda x: parse_ep_num(x.ep_number))
+            except Exception as e:
+                logger.warning(f"Failed to sort episodes list: {e}")
+            
+            # Load HTML template file securely
+            template_path = os.path.join(os.path.dirname(__file__), "app", "templates", "episodes.html")
+            if not os.path.exists(template_path):
+                template_path = os.path.join("/app", "app", "templates", "episodes.html")
 
-        with open(template_path, "r", encoding="utf-8") as f:
-            content = f.read()
+            with open(template_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                
+            # Perform dynamic template replacement
+            buttons_html = ""
+            for ep in episodes:
+                buttons_html += f'<button class="btn" onclick="selectEpisode(\'{ep.ep_number}\')">{ep.ep_number}</button>\n'
+                
+            content = content.replace('{{ anilist_id }}', str(anilist_id))
             
-        # Perform dynamic template replacement
-        buttons_html = ""
-        for ep in episodes:
-            buttons_html += f'<button class="btn" onclick="selectEpisode(\'{ep.ep_number}\')">{ep.ep_number}</button>\n'
-            
-        content = content.replace('{{ anilist_id }}', str(anilist_id))
-        
-        # Replace the Jinja block with our pre-built HTML
-        start_jinja = content.find('{% for ep in episodes %}')
-        end_jinja = content.find('{% endfor %}') + len('{% endfor %}')
-        if start_jinja != -1 and end_jinja != -1:
-            content = content[:start_jinja] + buttons_html + content[end_jinja:]
-            
-        return HTMLResponse(content=content, status_code=200)
+            start_jinja = content.find('{% for ep in episodes %}')
+            end_jinja = content.find('{% endfor %}') + len('{% endfor %}')
+            if start_jinja != -1 and end_jinja != -1:
+                content = content[:start_jinja] + buttons_html + content[end_jinja:]
+                
+            return HTMLResponse(content=content, status_code=200)
+    except Exception as e:
+        logger.exception(f"Error rendering webapp_episodes for anilist_id {anilist_id}")
+        return HTMLResponse(content=f"<h3>Error rendering WebApp: {e}</h3>", status_code=500)
 
 @app.get("/webapp/qualities", response_class=HTMLResponse)
 async def webapp_qualities(db_cache_id: int, anilist_id: int, ep_number: str):
-    async with AsyncSessionLocal() as db_session:
-        stmt = select(DownloadCache).where(DownloadCache.id == db_cache_id)
-        res = await db_session.execute(stmt)
-        dl_cache = res.scalar_one_or_none()
-        
-        qualities = dl_cache.qualities if dl_cache else {}
-        
-        base_dir = Path(__file__).resolve().parent
-        template_path = base_dir / "app" / "templates" / "qualities.html"
-        if not template_path.exists():
-            template_path = Path("/app/app/templates/qualities.html")
+    try:
+        async with AsyncSessionLocal() as db_session:
+            stmt = select(DownloadCache).where(DownloadCache.id == db_cache_id)
+            res = await db_session.execute(stmt)
+            dl_cache = res.scalar_one_or_none()
+            
+            qualities = dl_cache.qualities if dl_cache else {}
+            
+            template_path = os.path.join(os.path.dirname(__file__), "app", "templates", "qualities.html")
+            if not os.path.exists(template_path):
+                template_path = os.path.join("/app", "app", "templates", "qualities.html")
 
-        with open(template_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            
-        # Build quality buttons HTML dynamically
-        buttons_html = ""
-        if "auto" in qualities or not qualities:
-            buttons_html += '<button class="btn btn-auto" onclick="selectQuality(\'auto\')">تلقائي (حجم ذكي &lt;= 2 جيجا)</button>\n'
-        for q in ["1080p", "720p", "480p", "360p", "240p"]:
-            if q in qualities:
-                btn_class = f"btn-{q}"
-                buttons_html += f'<button class="btn {btn_class}" onclick="selectQuality(\'{q}\')">{q}</button>\n'
+            with open(template_path, "r", encoding="utf-8") as f:
+                content = f.read()
                 
-        content = content.replace('{{ db_cache_id }}', str(db_cache_id))
-        content = content.replace('{{ anilist_id }}', str(anilist_id))
-        content = content.replace('{{ ep_number }}', str(ep_number))
-        
-        # Replace Jinja if blocks with our pre-built HTML
-        start_list = content.find('<div class="list" id="list">') + len('<div class="list" id="list">')
-        end_list = content.find('</div>', start_list)
-        if start_list != -1 and end_list != -1:
-            content = content[:start_list] + "\n" + buttons_html + content[end_list:]
+            buttons_html = ""
+            if "auto" in qualities or not qualities:
+                buttons_html += '<button class="btn btn-auto" onclick="selectQuality(\'auto\')">تلقائي (حجم ذكي &lt;= 2 جيجا)</button>\n'
+            for q in ["1080p", "720p", "480p", "360p", "240p"]:
+                if q in qualities:
+                    btn_class = f"btn-{q}"
+                    buttons_html += f'<button class="btn {btn_class}" onclick="selectQuality(\'{q}\')">{q}</button>\n'
+                    
+            content = content.replace('{{ db_cache_id }}', str(db_cache_id))
+            content = content.replace('{{ anilist_id }}', str(anilist_id))
+            content = content.replace('{{ ep_number }}', str(ep_number))
             
-        return HTMLResponse(content=content, status_code=200)
+            start_list = content.find('<div class="list" id="list">') + len('<div class="list" id="list">')
+            end_list = content.find('</div>', start_list)
+            if start_list != -1 and end_list != -1:
+                content = content[:start_list] + "\n" + buttons_html + content[end_list:]
+                
+            return HTMLResponse(content=content, status_code=200)
+    except Exception as e:
+        logger.exception(f"Error rendering webapp_qualities: {e}")
+        return HTMLResponse(content=f"<h3>Error rendering WebApp: {e}</h3>", status_code=500)
 
 @app.post("/api/webapp/select_episode")
 async def api_select_episode(payload: WebAppEpisodePayload):
