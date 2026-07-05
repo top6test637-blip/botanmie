@@ -72,22 +72,15 @@ async def get_thumbnail_input(bot: Bot) -> Optional[FSInputFile]:
         
     try:
         logger.info(f"Downloading custom thumbnail file from Telegram file_id: {file_id}")
-        file_info = await bot.get_file(file_id)
-        if file_info and file_info.file_path:
-            # Download custom thumbnail from Telegram cloud server to guarantee 200 OK delivery.
-            real_url = f"https://api.telegram.org/file/bot{config.BOT_TOKEN}/{file_info.file_path}"
-            
-            logger.info(f"Downloading custom thumbnail from Telegram Cloud: {real_url}")
-            
-            os.makedirs(os.path.dirname(raw_path), exist_ok=True)
-            import aiohttp
-            async with aiohttp.ClientSession() as session:
-                async with session.get(real_url, timeout=30) as resp:
-                    if resp.status == 200:
-                        with open(raw_path, "wb") as f:
-                            f.write(await resp.read())
-                    else:
-                        logger.error(f"Failed to download thumbnail from Telegram Cloud (status {resp.status}): {real_url}")
+        # Always query and download custom background thumbnails from Telegram's official cloud server
+        # to ensure correct relative path translation (e.g. photos/file_1.jpg) and direct 200 OK delivery,
+        # bypassing local Bot API server path discrepancies.
+        async with Bot(token=bot.token) as cloud_bot:
+            file_info = await cloud_bot.get_file(file_id)
+            if file_info and file_info.file_path:
+                logger.info(f"Downloading custom thumbnail from Telegram Cloud path: {file_info.file_path}")
+                os.makedirs(os.path.dirname(raw_path), exist_ok=True)
+                await cloud_bot.download_file(file_info.file_path, destination=str(raw_path))
             
             if raw_path.exists() and raw_path.stat().st_size > 0:
                 success = prepare_telegram_thumbnail(raw_path, optimized_path)
