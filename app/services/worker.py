@@ -58,8 +58,8 @@ async def get_video_thumbnail(bot: Bot, db_session_factory, anilist_id: int) -> 
     """Retrieves custom admin thumbnail strictly and exclusively as video cover art."""
     return await get_thumbnail_input(bot)
 
-async def save_telegram_file_cache(db_session_factory, anilist_id: int, ep_number: str, quality: str, file_id: str):
-    """Persists Telegram file_id to TelegramFileCache table for zero-second instant delivery after restarts."""
+async def save_telegram_file_cache(db_session_factory, anilist_id: int, ep_number: str, quality: str, file_id: str, file_size_mb: Optional[float] = None):
+    """Persists Telegram file_id and real file size in MB to TelegramFileCache table for zero-second instant delivery."""
     try:
         from app.database.models import TelegramFileCache
         async with db_session_factory() as session:
@@ -72,16 +72,19 @@ async def save_telegram_file_cache(db_session_factory, anilist_id: int, ep_numbe
             existing = res.scalar_one_or_none()
             if existing:
                 existing.file_id = file_id
+                if file_size_mb and file_size_mb > 0:
+                    existing.file_size = file_size_mb
             else:
                 new_entry = TelegramFileCache(
                     anilist_id=anilist_id,
                     ep_number=ep_number,
                     quality=quality,
-                    file_id=file_id
+                    file_id=file_id,
+                    file_size=file_size_mb
                 )
                 session.add(new_entry)
             await session.commit()
-            logger.info(f"Saved TelegramFileCache entry for anilist_id={anilist_id}, ep={ep_number}, quality={quality}")
+            logger.info(f"Saved TelegramFileCache entry for anilist_id={anilist_id}, ep={ep_number}, quality={quality}, size={file_size_mb} MB")
     except Exception as e:
         logger.exception(f"Error saving to TelegramFileCache: {e}")
 
@@ -320,11 +323,13 @@ async def execute_queued_task(
             chan = config.CHANNEL_USERNAME if config.CHANNEL_USERNAME else (f"@{bot_info.username}" if bot_info else "")
             if chan and not chan.startswith("@"): chan = "@" + chan
             
+            file_size_val = getattr(tf_entry, "file_size", None)
+            size_caption = f"{file_size_val:.1f} MB" if file_size_val and file_size_val > 0 else "سريع ⚡"
             caption = (
                 f"🎬 **{anime_title}**\n"
                 f"🔢 **الحلقة:** {episode_num}\n"
                 f"⚙️ **الجودة:** {tf_entry.quality}\n"
-                f"💾 **الحجم:** محمل مسبقاً ⚡\n\n"
+                f"💾 **الحجم:** {size_caption}\n\n"
                 f"🎥 **مشاهدة ممتعة!** ✨🍿\n"
                 f"📢 **القناة:** {chan}"
             )
@@ -615,7 +620,7 @@ async def execute_queued_task(
         await mirror_video_to_library(bot, db_session_factory, anilist_id, anime_title, episode_num, selected_quality, uploaded_file_id)
 
         # 8. Cache uploaded Telegram file ID globally and strictly in TelegramFileCache DB
-        await save_telegram_file_cache(db_session_factory, anilist_id, episode_num, selected_quality, uploaded_file_id)
+        await save_telegram_file_cache(db_session_factory, anilist_id, episode_num, selected_quality, uploaded_file_id, file_size_mb=size_mb)
 
         async with db_session_factory() as session:
             stmt_update = select(DownloadCache).where(DownloadCache.play_url == play_url)

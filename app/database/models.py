@@ -31,6 +31,7 @@ class TelegramFileCache(Base):
     ep_number = Column(String(50), nullable=False, index=True)
     quality = Column(String(50), nullable=False, index=True)
     file_id = Column(String(500), nullable=False)
+    file_size = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (

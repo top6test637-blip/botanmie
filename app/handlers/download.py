@@ -261,7 +261,7 @@ async def prompt_quality_selection(
     if webapp_domain:
         q_webapp_url = f"{webapp_domain}/webapp/qualities?db_cache_id={db_cache_id}&anilist_id={anilist_id}&ep_number={ep_number}"
         keyboard_buttons.append([
-            InlineKeyboardButton(text="📱 اختر الجودة في الميني أب (Mini App)", web_app=WebAppInfo(url=q_webapp_url))
+            InlineKeyboardButton(text="⚙️ الجودات المتوفرة للتحميل 📥", web_app=WebAppInfo(url=q_webapp_url))
         ])
 
     keyboard_buttons.append([
