@@ -535,7 +535,7 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
 
 async def fetch_url_content(url: str, session: Any, referer: Optional[str] = None) -> str:
     """Universal helper to fetch HTML/text content from any URL using browser headers & TLS impersonation."""
-    headers = get_browser_headers(url, referer=referer)
+    headers = get_browser_headers(referer if referer else url)
     try:
         if hasattr(session, 'get') and hasattr(session, 'impersonate'):
             resp = await session.get(url, headers=headers, timeout=10)

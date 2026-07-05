@@ -74,8 +74,36 @@ async def get_thumbnail_input(bot: Bot) -> Optional[FSInputFile]:
         logger.info(f"Downloading custom thumbnail file from Telegram file_id: {file_id}")
         file_info = await bot.get_file(file_id)
         if file_info and file_info.file_path:
+            raw_file_path = file_info.file_path
+            # Extract relative path (photos/..., documents/..., etc.) to support local/absolute paths returned by get_file
+            match = re.search(r'(photos/.*|documents/.*|videos/.*|voice/.*|video_note/.*)$', raw_file_path)
+            rel_path = match.group(1) if match else raw_file_path.lstrip("/")
+            
+            # Dynamically build the download URL using configured local Bot API server or public API fallback
+            api_server = config.TELEGRAM_API_SERVER or "https://api.telegram.org"
+            if not api_server.startswith("http"):
+                api_server = f"http://{api_server}"
+            
+            download_url = f"{api_server.rstrip('/')}/file/bot{config.BOT_TOKEN}/{rel_path}"
+            logger.info(f"Downloading custom thumbnail from resolved local URL: {download_url}")
+            
             os.makedirs(os.path.dirname(raw_path), exist_ok=True)
-            await bot.download_file(file_info.file_path, str(raw_path))
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get(download_url, timeout=30) as resp:
+                    if resp.status == 200:
+                        with open(raw_path, "wb") as f:
+                            f.write(await resp.read())
+                    else:
+                        logger.warning(f"Failed to download from local URL (status {resp.status}). Trying public Telegram API fallback...")
+                        pub_url = f"https://api.telegram.org/file/bot{config.BOT_TOKEN}/{rel_path}"
+                        async with session.get(pub_url, timeout=30) as pub_resp:
+                            if pub_resp.status == 200:
+                                with open(raw_path, "wb") as f:
+                                    f.write(await pub_resp.read())
+                            else:
+                                logger.error(f"Public fallback also failed (status {pub_resp.status})")
+            
             if raw_path.exists() and raw_path.stat().st_size > 0:
                 success = prepare_telegram_thumbnail(raw_path, optimized_path)
                 if success and optimized_path.exists():
