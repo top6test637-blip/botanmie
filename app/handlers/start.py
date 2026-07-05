@@ -30,6 +30,9 @@ async def send_welcome_panel(message: Message, db_session: AsyncSession):
             InlineKeyboardButton(text="🎲 إقترح لي", callback_data="menu_suggest")
         ],
         [
+            InlineKeyboardButton(text="🗂️ التصنيفات الإضافية وأزرار المناسبات 🎭", callback_data="open_custom_categories")
+        ],
+        [
             InlineKeyboardButton(text="⭐ قائمة المفضلة", callback_data="menu_favorites")
         ],
         [
@@ -65,6 +68,9 @@ async def send_welcome_panel(message: Message, db_session: AsyncSession):
         )
     
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+    # Check if we should edit message or send a new one
+    # To prevent issues, if we're called via callback, edit text. But wait, send_welcome_panel takes message: Message.
+    # So it sends a new message. That is perfect!
     await message.answer(welcome_text, reply_markup=markup, parse_mode="HTML")
 
 @router.message(CommandStart())
@@ -396,3 +402,79 @@ async def handle_menu_ads(callback: CallbackQuery):
         await callback.message.edit_text(ads_text, reply_markup=markup, parse_mode="HTML")
     except Exception:
         await callback.message.answer(ads_text, reply_markup=markup, parse_mode="HTML")
+
+
+@router.callback_query(F.data == "open_custom_categories")
+async def handle_open_custom_categories(callback: CallbackQuery, db_session: AsyncSession):
+    await safe_answer(callback)
+    
+    from app.database.models import CustomButton
+    from sqlalchemy import select
+    
+    stmt = select(CustomButton).order_by(CustomButton.created_at.asc())
+    res = await db_session.execute(stmt)
+    custom_btns = res.scalars().all()
+    
+    inline_keyboard = []
+    row = []
+    for btn in custom_btns:
+        row.append(InlineKeyboardButton(text=f"📁 {btn.text}", callback_data=f"custom_btn_click:{btn.id}"))
+        if len(row) == 2:
+            inline_keyboard.append(row)
+            row = []
+    if row:
+        inline_keyboard.append(row)
+        
+    inline_keyboard.append([InlineKeyboardButton(text="[ 🔙 رجوع للقائمة الرئيسية ]", callback_data="back_to_main_menu")])
+    markup = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+    
+    prompt = "🗂️ أهلاً بك في قسم التصنيفات الخاصة والمناسبات.. اختر ما تفضله أدناه لاستكشاف الأنميات الموصى بها:"
+    try:
+        await callback.message.edit_text(prompt, reply_markup=markup, parse_mode="HTML")
+    except Exception:
+        await callback.message.answer(prompt, reply_markup=markup, parse_mode="HTML")
+
+
+@router.callback_query(F.data == "back_to_main_menu")
+async def handle_back_to_main_menu(callback: CallbackQuery, db_session: AsyncSession):
+    await safe_answer(callback)
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+    await send_welcome_panel(callback.message, db_session)
+
+
+@router.callback_query(F.data.startswith("custom_btn_click:"))
+async def handle_custom_btn_click(callback: CallbackQuery, db_session: AsyncSession, state: FSMContext):
+    await safe_answer(callback)
+    btn_id = int(callback.data.split(":")[1])
+    
+    from app.database.models import CustomButton
+    from sqlalchemy import select
+    
+    stmt = select(CustomButton).where(CustomButton.id == btn_id)
+    res = await db_session.execute(stmt)
+    btn = res.scalar_one_or_none()
+    
+    if not btn:
+        await callback.message.answer("❌ عذراً، لم يتم العثور على هذا القسم.")
+        return
+        
+    # Increment clicks
+    btn.clicks += 1
+    db_session.add(btn)
+    await db_session.commit()
+    
+    # Trigger handle_anime_search
+    from app.handlers.search import handle_anime_search
+    fake_msg = Message(
+        message_id=callback.message.message_id,
+        date=callback.message.date,
+        chat=callback.message.chat,
+        from_user=callback.from_user,
+        text=btn.text
+    ).as_(callback.bot)
+    
+    await handle_anime_search(fake_msg, db_session, state)
+

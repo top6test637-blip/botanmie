@@ -139,3 +139,14 @@ class Blacklist(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class CustomButton(Base):
+    """Stores custom dynamic buttons/genres/categories configured by the admin."""
+    __tablename__ = "custom_buttons"
+
+    id = Column(Integer, primary_key=True)
+    text = Column(String(255), unique=True, nullable=False, index=True)
+    clicks = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+

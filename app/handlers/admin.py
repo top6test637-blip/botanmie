@@ -18,6 +18,7 @@ class AdminStates(StatesGroup):
     waiting_for_broadcast = State()
     waiting_for_channel = State()
     waiting_for_bg_photo = State()
+    waiting_for_custom_button_name = State()
 
 router = Router(name="admin")
 
@@ -551,7 +552,7 @@ async def cmd_broadcast_ep(message: Message, db_session: AsyncSession):
 
 
 async def get_admin_panel_data(db_session: AsyncSession):
-    from app.database.models import User, PersistentTaskQueue
+    from app.database.models import User, PersistentTaskQueue, CustomButton
     from sqlalchemy import func
     from datetime import datetime, date
     from app.utils.settings import get_setting
@@ -567,14 +568,35 @@ async def get_admin_panel_data(db_session: AsyncSession):
     res_clicks = await db_session.execute(stmt_clicks)
     today_clicks = (res_clicks.scalar() or 0) + 42
     
-    total_buttons = 10  # constant as in the requested UI layout
+    # 3. Get total custom buttons
+    stmt_btns = select(func.count(CustomButton.id))
+    res_btns = await db_session.execute(stmt_btns)
+    total_buttons = res_btns.scalar() or 0
     
+    # Get all custom buttons to display in the dashboard text
+    stmt_btn_list = select(CustomButton).order_by(CustomButton.created_at.asc())
+    res_btn_list = await db_session.execute(stmt_btn_list)
+    custom_btns = res_btn_list.scalars().all()
+    
+    buttons_text = ""
+    if custom_btns:
+        rows = []
+        row = []
+        for btn in custom_btns:
+            row.append(f"📁 {btn.text}")
+            if len(row) == 4:
+                rows.append(" ".join(row))
+                row = []
+        if row:
+            rows.append(" ".join(row))
+        buttons_text = "\n".join(rows) + "\n\n"
+    else:
+        buttons_text = "لا توجد أزرار مضافة حالياً.\n\n"
+        
     text = (
         "🤖 <b>لوحة التحكم</b>\n\n"
         f"📊 الأزرار: {total_buttons} | المستخدمين: {total_users} | نقرات اليوم: {today_clicks}\n\n"
-        "📁 شونين 📁 رومانسي 📁 رياضي 📁 نفسي\n"
-        "📁 كوميدي 📁 رعب 📁 اكشن 📁 دراما\n"
-        "📁 خارق 📁 موسيقى\n\n"
+        f"{buttons_text}"
         "( + ) لإضافة زر جديد\n"
         "اضغط على أي زر لتعديله"
     )
@@ -775,14 +797,174 @@ async def handle_admin_button_settings(callback: CallbackQuery, db_session: Asyn
         return
     await safe_answer(callback)
     
+    from app.database.models import CustomButton
+    stmt = select(CustomButton).order_by(CustomButton.created_at.asc())
+    res = await db_session.execute(stmt)
+    buttons = res.scalars().all()
+    
     text = (
         "⚙️ <b>اعدادات بوت الازرار</b>\n\n"
-        "هذه اللوحة تمكنك من تعديل الأزرار التفاعلية للأقسام والمجلدات المعروضة للمستخدمين."
+        "هذه اللوحة تمكنك من تعديل الأزرار التفاعلية للأقسام والمجلدات المعروضة للمستخدمين.\n\n"
+        "الأزرار الحالية:\n"
     )
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔙 رجوع للوحة التحكم", callback_data="admin_home")]
-    ])
+    if not buttons:
+        text += "لا يوجد أزرار مضافة حالياً. اضغط أدناه لإضافة زر."
+    else:
+        text += "اضغط على أي زر أدناه لحذفه ❌:\n"
+        
+    inline_keyboard = []
+    row = []
+    for btn in buttons:
+        row.append(InlineKeyboardButton(text=f"❌ {btn.text}", callback_data=f"delete_btn:{btn.id}"))
+        if len(row) == 2:
+            inline_keyboard.append(row)
+            row = []
+    if row:
+        inline_keyboard.append(row)
+        
+    inline_keyboard.append([InlineKeyboardButton(text="➕ إضافة زر جديد", callback_data="add_custom_btn")])
+    inline_keyboard.append([InlineKeyboardButton(text="🔙 رجوع للوحة التحكم", callback_data="admin_home")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+    
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+@router.callback_query(F.data == "add_custom_btn")
+async def handle_add_custom_btn(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
+    authorized = await is_admin(callback.from_user.id, db_session)
+    if not authorized:
+        await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
+        return
+    await safe_answer(callback)
+    await state.set_state(AdminStates.waiting_for_custom_button_name)
+    
+    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ إلغاء", callback_data="admin_button_settings")]
+    ])
+    
+    await callback.message.edit_text(
+        "📝 <b>يرجى إرسال اسم الزر الجديد:</b>\n"
+        "أرسل الاسم كرسالة نصية (مثال: أكشن، شونين، رياضي).",
+        reply_markup=cancel_kb,
+        parse_mode="HTML"
+    )
+
+@router.message(AdminStates.waiting_for_custom_button_name)
+async def process_custom_button_name(message: Message, state: FSMContext, db_session: AsyncSession):
+    authorized = await is_admin(message.from_user.id, db_session)
+    if not authorized:
+        await message.answer("❌ غير مصرح لك.")
+        await state.clear()
+        return
+        
+    btn_text = message.text.strip()
+    if not btn_text:
+        await message.answer("⚠️ يرجى إدخال اسم صحيح للزر.")
+        return
+        
+    from app.database.models import CustomButton
+    # Check if duplicate
+    stmt = select(CustomButton).where(CustomButton.text == btn_text)
+    res = await db_session.execute(stmt)
+    existing = res.scalar_one_or_none()
+    if existing:
+        await message.answer("⚠️ هذا الزر موجود بالفعل.")
+        return
+        
+    try:
+        new_btn = CustomButton(text=btn_text)
+        db_session.add(new_btn)
+        await db_session.commit()
+        
+        await message.answer(f"✅ تم إضافة الزر <b>'{btn_text}'</b> بنجاح!", parse_mode="HTML")
+    except Exception as e:
+        logger.exception("Error adding custom button")
+        await message.answer(f"❌ حدث خطأ أثناء إضافة الزر: {e}")
+        
+    await state.clear()
+    
+    # Re-render settings view
+    stmt_all = select(CustomButton).order_by(CustomButton.created_at.asc())
+    res_all = await db_session.execute(stmt_all)
+    buttons = res_all.scalars().all()
+    
+    text = (
+        "⚙️ <b>اعدادات بوت الازرار</b>\n\n"
+        "هذه اللوحة تمكنك من تعديل الأزرار التفاعلية للأقسام والمجلدات المعروضة للمستخدمين.\n\n"
+        "الأزرار الحالية:\n"
+    )
+    if not buttons:
+        text += "لا يوجد أزرار مضافة حالياً. اضغط أدناه لإضافة زر."
+    else:
+        text += "اضغط على أي زر أدناه لحذفه ❌:\n"
+        
+    inline_keyboard = []
+    row = []
+    for btn in buttons:
+        row.append(InlineKeyboardButton(text=f"❌ {btn.text}", callback_data=f"delete_btn:{btn.id}"))
+        if len(row) == 2:
+            inline_keyboard.append(row)
+            row = []
+    if row:
+        inline_keyboard.append(row)
+        
+    inline_keyboard.append([InlineKeyboardButton(text="➕ إضافة زر جديد", callback_data="add_custom_btn")])
+    inline_keyboard.append([InlineKeyboardButton(text="🔙 رجوع للوحة التحكم", callback_data="admin_home")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+    
+    await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+
+@router.callback_query(F.data.startswith("delete_btn:"))
+async def handle_delete_custom_btn(callback: CallbackQuery, db_session: AsyncSession):
+    authorized = await is_admin(callback.from_user.id, db_session)
+    if not authorized:
+        await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
+        return
+        
+    btn_id = int(callback.data.split(":")[1])
+    from app.database.models import CustomButton
+    stmt = select(CustomButton).where(CustomButton.id == btn_id)
+    res = await db_session.execute(stmt)
+    btn = res.scalar_one_or_none()
+    if btn:
+        await db_session.delete(btn)
+        await db_session.commit()
+        await safe_answer(callback, "تم حذف الزر بنجاح!")
+    else:
+        await safe_answer(callback, "⚠️ لم يتم العثور على الزر.")
+        
+    # Re-render settings view
+    stmt_all = select(CustomButton).order_by(CustomButton.created_at.asc())
+    res_all = await db_session.execute(stmt_all)
+    buttons = res_all.scalars().all()
+    
+    text = (
+        "⚙️ <b>اعدادات بوت الازرار</b>\n\n"
+        "هذه اللوحة تمكنك من تعديل الأزرار التفاعلية للأقسام والمجلدات المعروضة للمستخدمين.\n\n"
+        "الأزرار الحالية:\n"
+    )
+    if not buttons:
+        text += "لا يوجد أزرار مضافة حالياً. اضغط أدناه لإضافة زر."
+    else:
+        text += "اضغط على أي زر أدناه لحذفه ❌:\n"
+        
+    inline_keyboard = []
+    row = []
+    for btn in buttons:
+        row.append(InlineKeyboardButton(text=f"❌ {btn.text}", callback_data=f"delete_btn:{btn.id}"))
+        if len(row) == 2:
+            inline_keyboard.append(row)
+            row = []
+    if row:
+        inline_keyboard.append(row)
+        
+    inline_keyboard.append([InlineKeyboardButton(text="➕ إضافة زر جديد", callback_data="add_custom_btn")])
+    inline_keyboard.append([InlineKeyboardButton(text="🔙 رجوع للوحة التحكم", callback_data="admin_home")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+    
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    except Exception:
+        pass
 
 @router.callback_query(F.data == "toggle_ban_notif")
 async def handle_toggle_ban_notif(callback: CallbackQuery, db_session: AsyncSession):

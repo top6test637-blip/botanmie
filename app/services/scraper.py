@@ -367,15 +367,68 @@ async def search_anime_scraper(title: str) -> List[Dict[str, Any]]:
         f"?s={quote(normalized_title)}"
     ]
     
+    results = []
     if CURL_CFFI_AVAILABLE and CurlAsyncSession:
         logger.info("Using curl_cffi TLS Impersonation (chrome120) for Cloudflare bypass.")
         proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
         async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
-            return await _run_scraper_search(session, title, search_queries)
+            results = await _run_scraper_search(session, title, search_queries)
     else:
         connector = get_connector()
         async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
-            return await _run_scraper_search(session, title, search_queries)
+            results = await _run_scraper_search(session, title, search_queries)
+
+    # If no results found, apply automated structural fallback
+    if not results:
+        logger.info(f"Primary search returned 0 results for '{title}'. Attempting structural/translation fallbacks...")
+        
+        fallback_queries = []
+        words = normalized_title.split()
+        if len(words) > 1:
+            # 1. Fallback: Strip trailing seasonal/sequel words (remove last word)
+            reduced_title_1 = " ".join(words[:-1])
+            fallback_queries.append(reduced_title_1)
+            # 2. Fallback: Extract the primary root token (first word)
+            fallback_queries.append(words[0])
+            
+        # 3. Fallback: Translation to Arabic
+        try:
+            from app.services.anilist import translate_to_arabic
+            arabic_title = await translate_to_arabic(title)
+            if arabic_title and arabic_title.strip() and arabic_title != title:
+                fallback_queries.append(arabic_title.strip())
+                ar_words = arabic_title.split()
+                if len(ar_words) > 1:
+                    fallback_queries.append(ar_words[0])
+        except Exception as te:
+            logger.warning(f"Failed to resolve Arabic translation for fallback search: {te}")
+            
+        # Deduplicate fallback queries while preserving order
+        unique_fallbacks = []
+        for q in fallback_queries:
+            q_clean = " ".join(q.replace("×", " x ").replace(":", " ").replace("-", " ").split()).strip()
+            if q_clean and q_clean.lower() != normalized_title.lower() and q_clean not in unique_fallbacks:
+                unique_fallbacks.append(q_clean)
+                
+        for fallback_q in unique_fallbacks:
+            logger.info(f"Trying fallback scraper search query: '{fallback_q}'")
+            sq = [
+                f"?search_param=animes&s={quote(fallback_q)}",
+                f"?s={quote(fallback_q)}"
+            ]
+            if CURL_CFFI_AVAILABLE and CurlAsyncSession:
+                proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
+                async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
+                    results = await _run_scraper_search(session, fallback_q, sq)
+            else:
+                connector = get_connector()
+                async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
+                    results = await _run_scraper_search(session, fallback_q, sq)
+            if results:
+                logger.info(f"Fallback search matched for query '{fallback_q}': resolved {len(results)} results.")
+                break
+                
+    return results
 
 async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
     """Retrieves the list of episodes for a WitAnime series slug, crawling pagination if present."""
