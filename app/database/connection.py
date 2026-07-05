@@ -4,9 +4,9 @@ from config import config
 from app.database.models import Base
 
 # Setup the database engine
-# Note: For SQLite, we enforce check_same_thread=False
+# Note: For SQLite, check_same_thread=False. For PostgreSQL (asyncpg), prepared_statement_cache_size=0 prevents prepared statement clashes.
 is_sqlite = config.DATABASE_URL.startswith("sqlite")
-connect_args = {"check_same_thread": False} if is_sqlite else {}
+connect_args = {"check_same_thread": False} if is_sqlite else {"prepared_statement_cache_size": 0}
 
 if is_sqlite:
     async_engine = create_async_engine(
