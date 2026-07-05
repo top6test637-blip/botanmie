@@ -38,9 +38,9 @@ class BlacklistMiddleware(BaseMiddleware):
                 blacklisted = res.scalar_one_or_none()
                 if blacklisted:
                     logger.warning(f"Blocked request from blacklisted user_id={user.id}")
-                    if isinstance(event, CallbackQuery):
+                    if isinstance(inner_event, CallbackQuery):
                         try:
-                            await event.answer("🚫 تم حظر حسابك من استخدام هذا البوت.", show_alert=True)
+                            await inner_event.answer("🚫 تم حظر حسابك من استخدام هذا البوت.", show_alert=True)
                         except Exception:
                             pass
                     return  # Drop request, don't execute handler

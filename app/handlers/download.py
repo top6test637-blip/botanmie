@@ -219,11 +219,17 @@ async def prompt_quality_selection(
         scraped_links = await get_download_links_scraper(play_url)
         
         if not scraped_links:
+            logger.error(f"DIAGNOSTIC: Failed to resolve qualities for {play_url}. Deep scan returned empty.")
+            inspect_text = (
+                f"⚠️ <b>فشل استخراج روابط الحلقة تلقائياً.</b>\n\n"
+                f"🛠️ يمكن للمشرفين فحص الصفحة يدوياً عبر هذا الرابط:\n"
+                f"🔗 <a href='{play_url}'>رابط صفحة المشاهدة المصدر</a>"
+            )
             try:
-                await bot.edit_message_text("⚠️ سيرفرات هذا الأنمي خاضعة للتحديث حالياً، يرجى تجربة جودة أخرى أو أنمي آخر.", chat_id=chat_id, message_id=status_msg_id)
+                await bot.edit_message_text(inspect_text, chat_id=chat_id, message_id=status_msg_id, parse_mode="HTML", disable_web_page_preview=True)
             except TelegramBadRequest:
                 try:
-                    await bot.edit_message_caption(chat_id=chat_id, message_id=status_msg_id, caption="⚠️ سيرفرات هذا الأنمي خاضعة للتحديث حالياً، يرجى تجربة جودة أخرى أو أنمي آخر.")
+                    await bot.edit_message_caption(chat_id=chat_id, message_id=status_msg_id, caption=inspect_text, parse_mode="HTML")
                 except Exception:
                     pass
             return False

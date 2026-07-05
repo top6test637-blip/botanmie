@@ -462,10 +462,17 @@ async def execute_queued_task(
             except Exception: pass
         qualities = await get_download_links_scraper(play_url)
         if not qualities:
+            logger.error(f"DIAGNOSTIC: Queue worker failed to resolve qualities for {play_url}. Deep scan returned empty.")
             if status_msg_id:
+                inspect_text = (
+                    f"❌ <b>فشل استخراج روابط التحميل من خادم البث.</b>\n\n"
+                    f"🛠️ يمكن فحص صفحة الحلقة يدوياً عبر هذا الرابط:\n"
+                    f"🔗 <a href='{play_url}'>رابط الصفحة المصدر</a>"
+                )
                 try:
-                    await bot.edit_message_text("❌ فشل استخراج روابط التحميل من خادم البث.", chat_id=chat_id, message_id=status_msg_id)
-                except Exception: pass
+                    await bot.edit_message_text(inspect_text, chat_id=chat_id, message_id=status_msg_id, parse_mode="HTML", disable_web_page_preview=True)
+                except Exception:
+                    pass
             return False
         # Save to DB cache
         async with db_session_factory() as session:

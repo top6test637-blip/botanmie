@@ -406,41 +406,31 @@ async def _run_get_episodes(session: Any, anime_slug: str) -> Dict[str, Any]:
     description = None
     duration = None
     
-    active_domain = WITANIME_DOMAIN
-    # Determine working domain first
-    for domain in WITANIME_DOMAINS:
-        test_u = f"https://{domain}/anime/{anime_slug}/"
-        try:
-            html = await get_html(test_u, session)
-            if html == "STATUS_403_FORBIDDEN":
-                raise ScraperError("CLOUDFLARE_BLOCK: The helper streaming site (witanime.life) is protected by Cloudflare and returned 403 Forbidden.")
-            if html:
-                active_domain = domain
-                break
-        except ScraperError:
-            raise
-        except Exception:
-            pass
+    # Try fetching the first page with our resilient fallback fetcher!
+    html, active_domain, resolved_slug = await try_fetch_anime_page_with_fallbacks(session, anime_slug)
+    if not html:
+        logger.warning(f"Resilient fallback fetcher returned empty for slug: {anime_slug}")
+        return {"episodes": []}
             
     page_num = 1
     while True:
         if page_num == 1:
-            url = f"https://{active_domain}/anime/{anime_slug}/"
+            # We already fetched the HTML for page 1
+            pass
         else:
-            url = f"https://{active_domain}/anime/{anime_slug}/page/{page_num}/"
-            
-        try:
-            html = await get_html(url, session)
-            if html == "STATUS_403_FORBIDDEN":
-                raise ScraperError("CLOUDFLARE_BLOCK: The helper streaming site (witanime.life) is protected by Cloudflare and returned 403 Forbidden.")
-            if not html:
-                logger.info(f"توقف جلب الصفحات عند الصفحة {page_num} بسبب محتوى فارغ")
+            url = f"https://{active_domain}/anime/{resolved_slug}/page/{page_num}/"
+            try:
+                html = await get_html(url, session)
+                if html == "STATUS_403_FORBIDDEN":
+                    raise ScraperError("CLOUDFLARE_BLOCK: The helper streaming site (witanime.life) is protected by Cloudflare and returned 403 Forbidden.")
+                if not html:
+                    logger.info(f"توقف جلب الصفحات عند الصفحة {page_num} بسبب محتوى فارغ")
+                    break
+            except ScraperError:
+                raise
+            except Exception as e:
+                logger.warning(f"فشل الاتصال بالصفحة {page_num}: {e}")
                 break
-        except ScraperError:
-            raise
-        except Exception as e:
-            logger.warning(f"فشل الاتصال بالصفحة {page_num}: {e}")
-            break
 
         if page_num == 1:
             try:
@@ -997,9 +987,41 @@ async def _run_get_download_links(session: Any, play_url: str) -> Dict[str, str]
         if "witanime.you" in play_url:
             play_url = play_url.replace("https://witanime.you", f"https://{WITANIME_DOMAIN}")
             
-        html = await get_html(play_url, session)
-        if html == "STATUS_403_FORBIDDEN":
-            raise ScraperError("CLOUDFLARE_BLOCK: The helper streaming site (witanime.life) is protected by Cloudflare and returned 403 Forbidden.")
+        # Try retrieving play URL, with dynamic domain fallback if it returns 404/empty
+        html = ""
+        url_domains = ["witanime.life", "witanime.pics", "witanime.site", "witanime.red", "witanime.com"]
+        
+        # Extract current domain from play_url
+        current_domain = None
+        for d in url_domains:
+            if d in play_url:
+                current_domain = d
+                break
+                
+        domains_to_try = [current_domain] if current_domain else []
+        for d in url_domains:
+            if d != current_domain:
+                domains_to_try.append(d)
+                
+        for domain in domains_to_try:
+            target_url = play_url
+            if current_domain and domain != current_domain:
+                target_url = play_url.replace(current_domain, domain)
+                
+            logger.info(f"Attempting to fetch play page: {target_url}")
+            try:
+                html = await get_html(target_url, session)
+                if html == "STATUS_403_FORBIDDEN":
+                    continue
+                if html and ("servers-list" in html or "episode-servers" in html or "download" in html):
+                    play_url = target_url  # update to successfully resolved url
+                    break
+            except Exception:
+                pass
+                
+        if not html:
+            logger.warning(f"Could not retrieve watch page HTML from any domain mirrors for: {play_url}")
+            return {}
             
         # Find server labels/names inside DOM
         soup = BeautifulSoup(html, "html.parser")
@@ -1113,7 +1135,11 @@ async def _run_get_download_links(session: Any, play_url: str) -> Dict[str, str]
                         resolved_links[q_name] = final_url
                         
         if not resolved_links:
-            logger.warning("Failed to parse working HLS streams or direct video files from embed servers or download table")
+            logger.warning("Failed to parse working HLS streams or direct video files from embed servers or download table. Triggering deep HTML regex scan...")
+            resolved_links = await execute_deep_html_regex_scan(html, session)
+            
+        if not resolved_links:
+            logger.warning("All standard parsing and deep regex scanning fallbacks yielded 0 links.")
             return {}
             
         logger.info(f"Resolved {len(resolved_links)} download link qualities: {list(resolved_links.keys())}")
@@ -1121,6 +1147,115 @@ async def _run_get_download_links(session: Any, play_url: str) -> Dict[str, str]
     except Exception:
         logger.exception("Error in process while scraping download links")
         return {}
+
+async def execute_deep_html_regex_scan(raw_html: str, session: Any) -> Dict[str, str]:
+    """
+    Treats the entire page source code as a raw text buffer.
+    Bypasses BeautifulSoup completely and uses regular expressions to capture hidden links.
+    """
+    logger.info("Executing raw HTML deep regex scanner fallback...")
+    resolved = {}
+    
+    # 1. Match direct HLS streams (.m3u8)
+    hls_matches = re.findall(r'https?://[^\s"\'\\<>]+?\.m3u8[^\s"\'\\<>]*', raw_html)
+    
+    # 2. Match standalone file lockers
+    locker_matches = re.findall(r'https?://(?:www\.)?(?:mega\.nz|drive\.google\.com|mp4upload\.com|ok\.ru|mediafire\.com)/[^\s"\'\\<>]+', raw_html)
+    
+    # Merge and deduplicate
+    all_links = list(set(hls_matches + locker_matches))
+    logger.info(f"Deep regex scanner captured {len(all_links)} potential resource links.")
+    
+    for link in all_links:
+        # Clean up escapes in URLs (e.g. "\/" -> "/")
+        link = link.replace("\\/", "/").replace("&amp;", "&")
+        
+        # Skip witanime pages themselves unless they contain .m3u8
+        if "witanime" in link and not ".m3u8" in link:
+            continue
+            
+        logger.info(f"Deep scanner checking link: {link}")
+        final_url = link
+        
+        # Resolve shortlink redirectors if matched
+        if any(x in link for x in ["go.witanime", "/go/", "redirect", "short"]):
+            try:
+                headers = get_browser_headers(link)
+                if hasattr(session, 'get') and hasattr(session, 'impersonate'):
+                    resp = await session.get(link, headers=headers, timeout=8)
+                    if resp.url:
+                        final_url = str(resp.url)
+                else:
+                    async with session.get(link, headers=headers, allow_redirects=True, ssl=False, timeout=8) as resp:
+                        final_url = str(resp.url)
+                logger.info(f"Resolved deep scan redirect to: {final_url}")
+            except Exception as e:
+                logger.warning(f"Failed redirect resolution for deep scan URL {link}: {e}")
+                continue
+                
+        # Skip if resolved URL is still a witanime page
+        if "witanime" in final_url and not ".m3u8" in final_url:
+            continue
+            
+        # Classify quality
+        lower_url = final_url.lower()
+        q_name = "480p"
+        if "1080" in lower_url or "fhd" in lower_url:
+            q_name = "1080p"
+        elif "720" in lower_url or "hd" in lower_url:
+            q_name = "720p"
+        elif "360" in lower_url or "sd" in lower_url:
+            q_name = "360p"
+        elif "240" in lower_url or "low" in lower_url:
+            q_name = "240p"
+            
+        if q_name not in resolved:
+            resolved[q_name] = final_url
+            
+    return resolved
+
+async def try_fetch_anime_page_with_fallbacks(session: Any, anime_slug: str) -> tuple[str, str, str]:
+    """
+    Cycles through alternate domains and slug structures to locate the anime page.
+    Returns (html, resolved_domain, resolved_slug).
+    """
+    slug_variations = [anime_slug]
+    
+    # Strip common seasonal/tv suffixes dynamically
+    suffixes = [
+        "-tv", "-season-2", "-season-3", "-season-4", "-season-5",
+        "-part-2", "-part-3", "-part-4", "-part-5", "-2nd-season", "-3rd-season"
+    ]
+    current_slug = anime_slug
+    for suffix in suffixes:
+        if current_slug.endswith(suffix):
+            trimmed = current_slug[:-len(suffix)]
+            if trimmed and trimmed not in slug_variations:
+                slug_variations.append(trimmed)
+                
+    # Try stripping trailing non-alphanumeric characters (like dashes, etc.)
+    stripped = re.sub(r'[^a-zA-Z0-9]+$', '', anime_slug)
+    if stripped and stripped not in slug_variations:
+        slug_variations.append(stripped)
+        
+    domains_to_try = ["witanime.life", "witanime.pics", "witanime.site", "witanime.red", "witanime.com"]
+    
+    for slug in slug_variations:
+        for domain in domains_to_try:
+            url = f"https://{domain}/anime/{slug}/"
+            logger.info(f"Attempting fallback fetch on: {url}")
+            try:
+                html = await get_html(url, session)
+                if html == "STATUS_403_FORBIDDEN":
+                    continue
+                # If we successfully parsed the page and it contains typical anime page indicators
+                if html and ("anime-info" in html or "episode" in html or "الحلقة" in html):
+                    logger.info(f"Successfully resolved fallback URL: {url}")
+                    return html, domain, slug
+            except Exception as e:
+                logger.debug(f"Failed fallback fetch for {url}: {e}")
+                
+    return "", "witanime.life", anime_slug
 
 async def resolve_anime_slug_scraper(
     title_romaji: Optional[str], 
