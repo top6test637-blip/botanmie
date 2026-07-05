@@ -179,7 +179,7 @@ async def task_consumer_worker(bot: Bot, db_session_factory):
     """Indefinite background consumer worker loop processing multi-user tasks concurrently."""
     logger.info("Background task consumer worker loop started with multi-user concurrent processing.")
     active_worker_tasks = set()
-    MAX_CONCURRENT_WORKER_TASKS = 5
+    MAX_CONCURRENT_WORKER_TASKS = 3
 
     while True:
         try:

@@ -385,20 +385,28 @@ async def _run_scraper_search(session: Any, title: str, search_queries: List[str
 async def search_anime_scraper(title: str) -> List[Dict[str, Any]]:
     normalized_title = title.replace("×", " x ").replace(":", " ").replace("-", " ")
     normalized_title = " ".join(normalized_title.split())
-    
+
     logger.info(f"Starting search for anime: {normalized_title} (original: {title})")
     if config.MOCK_MODE:
-        logger.info("[MOCK MODE] Simulating search result on WitAnime.")
+        logger.info("[MOCK MODE] Simulating search result.")
         return [{"title": f"{title} (TV)", "slug": "mock-anime-slug"}]
 
+    # 1. Gogoanime first (Primary source)
+    gogo_results = await search_anime_gogoanime(title)
+    if gogo_results:
+        logger.info(f"Gogoanime returned {len(gogo_results)} results for '{title}'")
+        return gogo_results
+
+    logger.info(f"Gogoanime failed, falling back to WitAnime for: {title}")
+
+    # 2. WitAnime second (Fallback source)
     search_queries = [
         f"?search_param=animes&s={quote(normalized_title)}",
         f"?s={quote(normalized_title)}"
     ]
-    
+
     results = []
     if CURL_CFFI_AVAILABLE and CurlAsyncSession:
-        logger.info("Using curl_cffi TLS Impersonation (chrome120) for Cloudflare bypass.")
         proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
         async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
             results = await _run_scraper_search(session, title, search_queries)
@@ -407,84 +415,82 @@ async def search_anime_scraper(title: str) -> List[Dict[str, Any]]:
         async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
             results = await _run_scraper_search(session, title, search_queries)
 
-    if not results:
-        logger.info(f"Witanime failed, trying Gogoanime for: {title}")
-        gogo_results = await search_anime_gogoanime(title)
-        if gogo_results:
-            return gogo_results
+    if results:
+        return results
 
-    if not results:
-        logger.info(f"Primary search returned 0 results for '{title}'. Attempting structural/translation fallbacks...")
-        fallback_queries = []
-        words = normalized_title.split()
-        if len(words) > 1:
-            reduced_title_1 = " ".join(words[:-1])
-            fallback_queries.append(reduced_title_1)
-            fallback_queries.append(words[0])
-        try:
-            from app.services.anilist import translate_to_arabic
-            arabic_title = await translate_to_arabic(title)
-            if arabic_title and arabic_title.strip() and arabic_title != title:
-                fallback_queries.append(arabic_title.strip())
-                ar_words = arabic_title.split()
-                if len(ar_words) > 1:
-                    fallback_queries.append(ar_words[0])
-        except Exception as te:
-            logger.warning(f"Failed to resolve Arabic translation for fallback search: {te}")
-        unique_fallbacks = []
-        for q in fallback_queries:
-            q_clean = " ".join(q.replace("×", " x ").replace(":", " ").replace("-", " ").split()).strip()
-            if q_clean and q_clean.lower() != normalized_title.lower() and q_clean not in unique_fallbacks:
-                unique_fallbacks.append(q_clean)
-        for fallback_q in unique_fallbacks:
-            logger.info(f"Trying fallback scraper search query: '{fallback_q}'")
-            sq = [
-                f"?search_param=animes&s={quote(fallback_q)}",
-                f"?s={quote(fallback_q)}"
-            ]
-            if CURL_CFFI_AVAILABLE and CurlAsyncSession:
-                proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
-                async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
-                    results = await _run_scraper_search(session, fallback_q, sq)
-            else:
-                connector = get_connector()
-                async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
-                    results = await _run_scraper_search(session, fallback_q, sq)
-            if results:
-                logger.info(f"Fallback search matched for query '{fallback_q}': resolved {len(results)} results.")
-                break
+    # 3. Structural / Translation fallback
+    logger.info(f"Primary search returned 0 results for '{title}'. Attempting structural/translation fallbacks...")
+    fallback_queries = []
+    words = normalized_title.split()
+    if len(words) > 1:
+        reduced_title_1 = " ".join(words[:-1])
+        fallback_queries.append(reduced_title_1)
+        fallback_queries.append(words[0])
+    try:
+        from app.services.anilist import translate_to_arabic
+        arabic_title = await translate_to_arabic(title)
+        if arabic_title and arabic_title.strip() and arabic_title != title:
+            fallback_queries.append(arabic_title.strip())
+            ar_words = arabic_title.split()
+            if len(ar_words) > 1:
+                fallback_queries.append(ar_words[0])
+    except Exception as te:
+        logger.warning(f"Failed to resolve Arabic translation for fallback search: {te}")
+
+    unique_fallbacks = []
+    for q in fallback_queries:
+        q_clean = " ".join(q.replace("×", " x ").replace(":", " ").replace("-", " ").split()).strip()
+        if q_clean and q_clean.lower() != normalized_title.lower() and q_clean not in unique_fallbacks:
+            unique_fallbacks.append(q_clean)
+
+    for fallback_q in unique_fallbacks:
+        logger.info(f"Trying fallback scraper search query: '{fallback_q}'")
+        sq = [
+            f"?search_param=animes&s={quote(fallback_q)}",
+            f"?s={quote(fallback_q)}"
+        ]
+        if CURL_CFFI_AVAILABLE and CurlAsyncSession:
+            proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
+            async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
+                results = await _run_scraper_search(session, fallback_q, sq)
+        else:
+            connector = get_connector()
+            async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
+                results = await _run_scraper_search(session, fallback_q, sq)
+        if results:
+            logger.info(f"Fallback search matched for query '{fallback_q}': resolved {len(results)} results.")
+            break
 
     return results
 
-async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
-    logger.info(f"جاري جلب قائمة الحلقات للأنمي: {anime_slug}")
+async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
+    logger.info(f"Scraping download links from watch page: {play_url}")
     if config.MOCK_MODE:
-        logger.info("[MOCK MODE] Generating mock episodes list.")
+        logger.info("[MOCK MODE] Returning mock direct download video paths.")
         return {
-            "episodes": [{"ep_number": str(i), "play_url": f"https://mock-play-page.com/{anime_slug}-episode-{i}"} for i in range(1, 13)],
-            "poster_url": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_10MB.mp4",
-            "description": "قصة أنمي تجريبية لوضع المحاكاة.",
-            "duration": "24 دقيقة"
+            "1080p": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/1080/Big_Buck_Bunny_1080_10s_30MB.mp4?mock_size=2500000000",
+            "720p": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_10MB.mp4?mock_size=2200000000",
         }
 
-    result = {}
-    if CURL_CFFI_AVAILABLE and CurlAsyncSession:
-        logger.info("Using curl_cffi for get_episodes_scraper")
-        proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
-        async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
-            result = await _run_get_episodes(session, anime_slug)
-    else:
-        connector = get_connector()
-        async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
-            result = await _run_get_episodes(session, anime_slug)
+    # 1. Gogoanime URL handler
+    if any(domain in play_url for domain in GOGOANIME_DOMAINS):
+        logger.info(f"Detected Gogoanime URL, using Gogoanime download handler.")
+        return await get_download_links_gogoanime(play_url)
 
-    if not result or not result.get("episodes"):
-        logger.info(f"WitAnime episodes failed for slug {anime_slug}, trying Gogoanime...")
-        gogo_data = await get_episodes_gogoanime(anime_slug)
-        if gogo_data and gogo_data.get("episodes"):
-            return gogo_data
+    # 2. WitAnime URL handler
+    if "witanime" in play_url:
+        logger.info(f"Detected WitAnime URL, using WitAnime download handler.")
+        if CURL_CFFI_AVAILABLE and CurlAsyncSession:
+            proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
+            async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
+                return await _run_get_download_links(session, play_url)
+        else:
+            connector = get_connector()
+            async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
+                return await _run_get_download_links(session, play_url)
 
-    return result
+    logger.warning(f"Unknown URL domain for download links: {play_url}")
+    return {}
 
 async def _run_get_episodes(session: Any, anime_slug: str) -> Dict[str, Any]:
     episodes = []
@@ -1060,18 +1066,25 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
             "720p": "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_10MB.mp4?mock_size=2200000000",
         }
 
-    if "gogoanime" in play_url:
+    # 1. Gogoanime URL handler
+    if any(domain in play_url for domain in GOGOANIME_DOMAINS):
+        logger.info(f"Detected Gogoanime URL, using Gogoanime download handler.")
         return await get_download_links_gogoanime(play_url)
 
-    if CURL_CFFI_AVAILABLE and CurlAsyncSession:
-        logger.info("Using curl_cffi for get_download_links_scraper")
-        proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
-        async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
-            return await _run_get_download_links(session, play_url)
-    else:
-        connector = get_connector()
-        async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
-            return await _run_get_download_links(session, play_url)
+    # 2. WitAnime URL handler
+    if "witanime" in play_url:
+        logger.info(f"Detected WitAnime URL, using WitAnime download handler.")
+        if CURL_CFFI_AVAILABLE and CurlAsyncSession:
+            proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
+            async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
+                return await _run_get_download_links(session, play_url)
+        else:
+            connector = get_connector()
+            async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
+                return await _run_get_download_links(session, play_url)
+
+    logger.warning(f"Unknown URL domain for download links: {play_url}")
+    return {}
 
 async def _run_get_download_links(session: Any, play_url: str) -> Dict[str, str]:
     try:
@@ -1366,34 +1379,111 @@ async def try_fetch_anime_page_with_fallbacks(session: Any, anime_slug: str) -> 
     return "", "witanime.life", anime_slug
 
 # ======================== GOGOANIME SCRAPER ========================
-GOGOANIME_DOMAIN = "gogoanime3.co"
+# ======================== GOGOANIME SCRAPER ========================
+GOGOANIME_DOMAINS = [
+    "gogoanime3.co",
+    "gogoanime.gg",
+    "gogoanime.life",
+    "gogoanime.ma",
+    "gogoanime.tel"
+]
 
 async def search_anime_gogoanime(title: str) -> List[Dict[str, Any]]:
-    """Searches Gogoanime for anime title and returns list of matches."""
     logger.info(f"Searching Gogoanime for: {title}")
-    search_url = f"https://{GOGOANIME_DOMAIN}/search.html?keyword={quote(title)}"
-    
-    async with aiohttp.ClientSession() as session:
+    for domain in GOGOANIME_DOMAINS:
+        search_url = f"https://{domain}/search.html?keyword={quote(title)}"
         try:
-            async with session.get(search_url, headers=get_browser_headers(search_url), timeout=15) as resp:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(search_url, headers=get_browser_headers(search_url), timeout=15) as resp:
+                    if resp.status != 200:
+                        continue
+                    html = await resp.text()
+                    soup = BeautifulSoup(html, "html.parser")
+                    items = soup.select("ul.items li a")
+                    results = []
+                    for a in items[:10]:
+                        href = a.get("href")
+                        if href and "/category/" in href:
+                            slug = href.split("/category/")[-1].strip("/")
+                            title_text = a.get("title") or a.text.strip()
+                            results.append({"title": title_text, "slug": slug})
+                    if results:
+                        logger.info(f"Gogoanime ({domain}) returned {len(results)} results")
+                        return results
+        except Exception as e:
+            logger.warning(f"Gogoanime search failed on {domain}: {e}")
+    return []
+
+async def get_episodes_gogoanime(anime_slug: str) -> Dict[str, Any]:
+    logger.info(f"Fetching Gogoanime episodes for slug: {anime_slug}")
+    for domain in GOGOANIME_DOMAINS:
+        url = f"https://{domain}/category/{anime_slug}"
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=get_browser_headers(url), timeout=15) as resp:
+                    if resp.status != 200:
+                        continue
+                    html = await resp.text()
+                    soup = BeautifulSoup(html, "html.parser")
+                    ep_list = soup.select("#episode_page li a")
+                    if not ep_list:
+                        ep_list = soup.select(".episodes-list a")
+                    episodes = []
+                    for a in ep_list:
+                        ep_num = a.text.strip()
+                        href = a.get("href")
+                        if href and "/" in href:
+                            ep_id = href.split("/")[-1].strip()
+                            if ep_id:
+                                episodes.append({
+                                    "ep_number": ep_num,
+                                    "play_url": f"https://{domain}/watch/{ep_id}"
+                                })
+                    if episodes:
+                        episodes.reverse()
+                        try:
+                            episodes.sort(key=lambda x: float(x["ep_number"]) if x["ep_number"].replace(".", "").isdigit() else 999999)
+                        except:
+                            pass
+                        logger.info(f"Gogoanime ({domain}) found {len(episodes)} episodes")
+                        return {"episodes": episodes}
+        except Exception as e:
+            logger.warning(f"Gogoanime episodes failed on {domain}: {e}")
+    return {"episodes": []}
+
+async def get_download_links_gogoanime(play_url: str) -> Dict[str, str]:
+    logger.info(f"Getting Gogoanime download links for: {play_url}")
+    # استخراج النطاق من الرابط
+    domain = play_url.split("/")[2]
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(play_url, headers=get_browser_headers(play_url), timeout=15) as resp:
                 if resp.status != 200:
-                    logger.warning(f"Gogoanime search failed with status {resp.status}")
-                    return []
+                    return {}
                 html = await resp.text()
                 soup = BeautifulSoup(html, "html.parser")
-                items = soup.select("ul.items li a")  # Gogoanime search results
-                results = []
-                for a in items[:10]:
-                    href = a.get("href")
-                    if href and "/category/" in href:
-                        slug = href.split("/category/")[-1].strip("/")
-                        title_text = a.get("title") or a.text.strip()
-                        results.append({"title": title_text, "slug": slug})
-                logger.info(f"Gogoanime returned {len(results)} results")
-                return results
-        except Exception as e:
-            logger.exception(f"Error searching Gogoanime: {e}")
-            return []
+                # Gogoanime watch page usually has iframe
+                iframe = soup.select_one("iframe")
+                if iframe and iframe.get("src"):
+                    embed_url = iframe["src"]
+                    # Try to resolve embed (could be another page)
+                    async with session.get(embed_url, headers=get_browser_headers(embed_url)) as embed_resp:
+                        if embed_resp.status == 200:
+                            embed_html = await embed_resp.text()
+                            video_src = re.search(r'src=["\']([^"\']+\.mp4[^"\']*)["\']', embed_html)
+                            if video_src:
+                                return {"720p": video_src.group(1)}
+                            hls_src = re.search(r'src=["\']([^"\']+\.m3u8[^"\']*)["\']', embed_html)
+                            if hls_src:
+                                return {"720p": hls_src.group(1)}
+                # Try direct video source in page
+                video_src = re.search(r'<source\s+src=["\']([^"\']+\.mp4[^"\']*)["\']', html)
+                if video_src:
+                    return {"720p": video_src.group(1)}
+                return {}
+    except Exception as e:
+        logger.exception(f"Error getting Gogoanime download links: {e}")
+        return {}
 
 async def get_episodes_gogoanime(anime_slug: str) -> Dict[str, Any]:
     """Retrieves episode list for a Gogoanime series slug."""
@@ -1482,25 +1572,25 @@ async def resolve_anime_slug_scraper(
     synonyms: Optional[List[str]] = None
 ) -> Optional[str]:
     from app.utils.match import sanitize_search_query, get_best_slug_match
-    
+
     queries_to_try = []
-    
+
     if title_romaji:
         cleaned_rom = sanitize_search_query(title_romaji)
         if cleaned_rom and len(cleaned_rom) > 2:
             queries_to_try.append((cleaned_rom, title_romaji))
-            
+
     if title_english:
         cleaned_eng = sanitize_search_query(title_english)
         if cleaned_eng and len(cleaned_eng) > 2 and cleaned_eng not in [q[0] for q in queries_to_try]:
             queries_to_try.append((cleaned_eng, title_english))
-            
+
     if synonyms:
         for syn in synonyms:
             cleaned_syn = sanitize_search_query(syn)
             if cleaned_syn and len(cleaned_syn) > 2 and cleaned_syn not in [q[0] for q in queries_to_try]:
                 queries_to_try.append((cleaned_syn, syn))
-                
+
     split_queries = []
     titles_to_split = []
     if title_romaji:
@@ -1509,7 +1599,7 @@ async def resolve_anime_slug_scraper(
         titles_to_split.append(title_english)
     if synonyms:
         titles_to_split.extend(synonyms)
-        
+
     for title in titles_to_split:
         for delimiter in [":", " - ", "/"]:
             if delimiter in title:
@@ -1518,7 +1608,7 @@ async def resolve_anime_slug_scraper(
                     if cleaned_part and len(cleaned_part) > 2:
                         if cleaned_part not in [q[0] for q in queries_to_try] and cleaned_part not in [s[0] for s in split_queries]:
                             split_queries.append((cleaned_part, part))
-                            
+
     for cleaned_query, orig_query in queries_to_try:
         logger.info(f"Searching WitAnime for: {cleaned_query} (original: {orig_query})")
         results = await search_anime_scraper(cleaned_query)
@@ -1527,7 +1617,7 @@ async def resolve_anime_slug_scraper(
             if slug:
                 logger.info(f"Successfully resolved slug '{slug}' for query: {cleaned_query}")
                 return slug
-                
+
     for cleaned_query, orig_query in split_queries:
         logger.info(f"Searching WitAnime for split fallback: {cleaned_query} (original: {orig_query})")
         results = await search_anime_scraper(cleaned_query)
@@ -1544,5 +1634,5 @@ async def resolve_anime_slug_scraper(
         if slug:
             return slug
 
-    logger.warning(f"Could not resolve any WitAnime slug for romaji='{title_romaji}', english='{title_english}'")
+    logger.warning(f"Could not resolve any slug for romaji='{title_romaji}', english='{title_english}'")
     return None
