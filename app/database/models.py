@@ -124,3 +124,14 @@ class SystemSettings(Base):
     key = Column(String(100), primary_key=True, index=True)
     value = Column(Text, nullable=True)
 
+
+class Blacklist(Base):
+    """Stores banned user IDs to prevent unauthorized access or structural tampering."""
+    __tablename__ = "blacklist"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(BigInteger, unique=True, nullable=False, index=True)
+    reason = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+

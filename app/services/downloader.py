@@ -37,6 +37,9 @@ class AdaptiveSemaphore:
             self.cond.notify_all()
 
 
+MAX_CONCURRENT_SEGMENTS = 64
+MULTIPART_THREADS = 64
+
 MAX_TELEGRAM_STANDARD_SIZE = 50 * 1024 * 1024       # 50 MB
 MAX_TELEGRAM_LOCAL_SIZE = 2 * 1024 * 1024 * 1024     # 2 GB
 
@@ -284,8 +287,8 @@ async def download_hls(
             actual_seg_size = first_seg_size - 252 if is_png_wrapped else first_seg_size
             estimated_total_size = total_segments * actual_seg_size
             
-            # Spawn parallel download tasks with progress tracking (uncapped 32 worker pool)
-            semaphore = asyncio.Semaphore(32)
+            # Spawn parallel download tasks with progress tracking (64 worker pool for 100MB/s)
+            semaphore = asyncio.Semaphore(MAX_CONCURRENT_SEGMENTS)
             completed_segments = 0
             
             async def download_segment_with_progress(idx, seg_url, is_png_wrapped, sem):
@@ -510,7 +513,7 @@ async def download_file(
     # Use multipart parallel downloader for direct files to bypass speed caps
     if total_size > 5 * 1024 * 1024:
         logger.info(f"Using multipart downloader for direct URL: {url}")
-        num_parts = 48 if ("mp4upload" in url or "yourupload" in url) else 64
+        num_parts = MULTIPART_THREADS
         success = await download_multipart(url, target_path, status_message, total_size, quality, num_parts=num_parts)
         if success:
             return True

@@ -99,6 +99,83 @@ async def cmd_deladmin(message: Message, db_session: AsyncSession):
         await db_session.rollback()
         await message.answer(f"❌ فشل إزالة المسؤول من قاعدة البيانات: {e}")
 
+@router.message(Command("ban"))
+async def cmd_ban(message: Message, db_session: AsyncSession):
+    if not await is_admin(message.from_user.id, db_session):
+        await message.answer("❌ عذراً، هذا الأمر مخصص للمسؤولين فقط.")
+        return
+        
+    target_user_id = None
+    args = message.text.split()
+    if len(args) > 1:
+        try:
+            target_user_id = int(args[1])
+        except ValueError:
+            await message.answer("❌ يرجى كتابة معرف المستخدم بشكل صحيح. مثال: `/ban 123456`", parse_mode="Markdown")
+            return
+    elif message.reply_to_message:
+        target_user_id = message.reply_to_message.from_user.id
+    else:
+        await message.answer("❌ يرجى تحديد معرف المستخدم أو الرد على رسالته بأمر `/ban`", parse_mode="Markdown")
+        return
+
+    from app.database.models import Blacklist
+    stmt = select(Blacklist).where(Blacklist.user_id == target_user_id)
+    res = await db_session.execute(stmt)
+    existing = res.scalar_one_or_none()
+    if existing:
+        await message.answer(f"⚠️ المستخدم `{target_user_id}` محظور بالفعل.", parse_mode="Markdown")
+        return
+
+    try:
+        new_ban = Blacklist(user_id=target_user_id, reason="Admin banned")
+        db_session.add(new_ban)
+        await db_session.commit()
+        logger.info(f"User {target_user_id} added to Blacklist by Admin {message.from_user.id}")
+        await message.answer(f"⛔ تم حظر المستخدم `{target_user_id}` بنجاح ومنعه من استخدام البوت.", parse_mode="Markdown")
+    except Exception as e:
+        logger.exception("Error adding user to blacklist")
+        await db_session.rollback()
+        await message.answer(f"❌ فشل حظر المستخدم: {e}")
+
+@router.message(Command("unban"))
+async def cmd_unban(message: Message, db_session: AsyncSession):
+    if not await is_admin(message.from_user.id, db_session):
+        await message.answer("❌ عذراً، هذا الأمر مخصص للمسؤولين فقط.")
+        return
+        
+    target_user_id = None
+    args = message.text.split()
+    if len(args) > 1:
+        try:
+            target_user_id = int(args[1])
+        except ValueError:
+            await message.answer("❌ يرجى كتابة معرف المستخدم بشكل صحيح. مثال: `/unban 123456`", parse_mode="Markdown")
+            return
+    elif message.reply_to_message:
+        target_user_id = message.reply_to_message.from_user.id
+    else:
+        await message.answer("❌ يرجى تحديد معرف المستخدم أو الرد على رسالته بأمر `/unban`", parse_mode="Markdown")
+        return
+
+    from app.database.models import Blacklist
+    stmt = select(Blacklist).where(Blacklist.user_id == target_user_id)
+    res = await db_session.execute(stmt)
+    ban_entry = res.scalar_one_or_none()
+    if not ban_entry:
+        await message.answer(f"⚠️ المستخدم `{target_user_id}` غير محظور.", parse_mode="Markdown")
+        return
+
+    try:
+        await db_session.delete(ban_entry)
+        await db_session.commit()
+        logger.info(f"User {target_user_id} unbanned by Admin {message.from_user.id}")
+        await message.answer(f"✅ تم إلغاء حظر المستخدم `{target_user_id}` بنجاح.", parse_mode="Markdown")
+    except Exception as e:
+        logger.exception("Error unbanning user")
+        await db_session.rollback()
+        await message.answer(f"❌ فشل إلغاء الحظر: {e}")
+
 @router.message(F.photo)
 async def handle_custom_thumbnail(message: Message, db_session: AsyncSession):
     authorized = await is_admin(message.from_user.id, db_session)

@@ -53,16 +53,15 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
                 "image_url": entry.image_url
             })
     else:
-        logger.info(f"كاش غير متوفر للبحث: '{query}'. جاري الاستعلام من AniList GraphQL...")
-        status_msg = await message.answer("🔍 جاري تهيئة البحث باستخدام AniList...")
+        logger.info(f"كاش غير متوفر للبحث: '{query}'. جاري الاستعلام من قواعد البيانات...")
+        status_msg = await message.answer("🔍 جاري تهيئة البحث.. anime")
         try:
             anilist_results = await search_anilist(query)
             await message.bot.delete_message(chat_id=message.chat.id, message_id=status_msg.message_id)
             
             if not anilist_results:
-                logger.info(f"AniList لم ترجع نتائج للبحث: '{query}'. جاري الانتقال للبحث في WitAnime...")
-                # Native Fallback search to WitAnime
-                status_msg = await message.answer("🔍 لم يتم العثور على نتائج في AniList. جاري البحث في WitAnime...")
+                logger.info(f"الخدمة الرئيسية لم ترجع نتائج للبحث: '{query}'. جاري الانتقال للبحث المساعد...")
+                status_msg = await message.answer("🔍 جاري توسيع نطاق البحث في قواعد البيانات...")
                 scraper_results = await search_anime_scraper(query)
                 await message.bot.delete_message(chat_id=message.chat.id, message_id=status_msg.message_id)
                 
@@ -348,6 +347,20 @@ async def render_episode_keyboard(
     cached_episodes.sort(key=lambda ep: parse_ep_num(ep.ep_number))
     
     inline_keyboard = []
+    
+    import os
+    from aiogram.types import WebAppInfo
+    from config import config
+    webapp_domain = config.WEBAPP_BASE_URL or os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+    if webapp_domain and not webapp_domain.startswith("http"):
+        webapp_domain = f"https://{webapp_domain}"
+        
+    if webapp_domain:
+        ep_webapp_url = f"{webapp_domain}/webapp/episodes?anilist_id={anilist_id}"
+        inline_keyboard.append([
+            InlineKeyboardButton(text="📱 فتح قائمة الحلقات في الميني أب (Mini App)", web_app=WebAppInfo(url=ep_webapp_url))
+        ])
+
     total_eps = len(cached_episodes)
     
     import html

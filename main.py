@@ -105,7 +105,9 @@ async def lifespan(app: FastAPI):
 
     # 5. Bind Middlewares
     from app.middlewares.subscription import SubscriptionMiddleware
+    from app.middlewares.blacklist import BlacklistMiddleware
     dp.update.outer_middleware(DbSessionMiddleware())
+    dp.update.outer_middleware(BlacklistMiddleware())
     dp.update.outer_middleware(SubscriptionMiddleware())
 
     # 6. Register routers

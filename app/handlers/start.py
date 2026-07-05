@@ -32,6 +32,9 @@ async def send_welcome_panel(message: Message, db_session: AsyncSession):
             InlineKeyboardButton(text="⭐ قائمة المفضلة", callback_data="menu_favorites")
         ],
         [
+            InlineKeyboardButton(text="🔄 إعادة تشغيل البوت", callback_data="reset_session")
+        ],
+        [
             InlineKeyboardButton(text="🛠️ الدعم الفني", callback_data="menu_support"),
             InlineKeyboardButton(text="❓ مساعدة", callback_data="menu_help")
         ],
@@ -41,24 +44,24 @@ async def send_welcome_panel(message: Message, db_session: AsyncSession):
     ]
     
     welcome_text = (
-        "✨ <b>أهلاً بك في بوت أنمي وانمي | Anime & Anmie</b> 🎬\n\n"
-        "مرحباً بك في وجهتك الأولى لمشاهدة وتحميل الأنمي بجودة عالية وسرعة فائقة! 🚀\n"
-        "البوت يدعم البحث الذكي (بالعربية والإنجليزية وأسماء الشخصيات) وتنزيل الحلقات مباشرة داخل تلغرام بأحجام تصل إلى 2 جيجابايت.\n\n"
+        "🗺️ <b>بوت الأنمي | Anime Bot</b>\n\n"
+        "مرحبًا بك في وجهتك الأولى لعالم الأنمي! ✨\n\n"
+        "📚 مكتبة ضخمة تضم آلاف الأنميات والأفلام.\n"
+        "🎬 أحدث الحلقات والمواسم أولاً بأول.\n"
+        "⚡ بحث سريع وتجربة استخدام احترافية.\n\n"
+        '" ابدأ رحلتك الآن، واستمتع بعالم أنمي بلا حدود! 💜 "'
     )
     
     if is_user_admin:
         keyboard.append([InlineKeyboardButton(text="🛠️ لوحة تحكم الإدارة (Admin)", callback_data="admin_home")])
         welcome_text += (
-            "🛠️ <b>قسم الإدارة والمسؤولين:</b>\n"
-            "مرحباً بك كمسؤول في البوت. إليك الأوامر المتاحة لك:\n"
+            "\n\n🛠️ <b>قسم الإدارة والمسؤولين:</b>\n"
             "• <code>/admin</code> - فتح لوحة التحكم الشاملة.\n"
-            "• <code>/addadmin &lt;ID&gt;</code> - إضافة مسؤول جديد.\n"
+            "• <code>/ban &lt;ID&gt;</code> - حظر مستخدم.\n"
+            "• <code>/unban &lt;ID&gt;</code> - إلغاء حظر مستخدم.\n"
+            "• <code>/addadmin &lt;ID&gt;</code> - إضافة مسؤول.\n"
             "• <code>/deladmin &lt;ID&gt;</code> - إزالة مسؤول.\n"
-            "• <code>/post_episode &lt;anime&gt; | &lt;episode&gt;</code> - بث ونشر حلقة جديدة في القناة.\n"
-            "• <code>/setthumb &lt;URL&gt;</code> - تعيين خلفية فيديو افتراضية من رابط.\n\n"
         )
-        
-    welcome_text += "👇 <b>اختر من القائمة أدناه لبدء المغامرة:</b>"
     
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
     await message.answer(welcome_text, reply_markup=markup, parse_mode="HTML")
@@ -176,6 +179,15 @@ async def cmd_help(message: Message):
         "• <b>سرعة ودعم فائق</b>: يدعم البوت تنزيل الحلقات والأفلام ذات الأحجام الضخمة حتى 2 جيجابايت لتلبي كافة الاحتياجات."
     )
     await message.answer(help_text, parse_mode="HTML")
+
+@router.callback_query(F.data == "reset_session")
+@router.message(F.text == "🔄 إعادة تشغيل البوت")
+async def handle_reset_session(event: TelegramObject, state: FSMContext, db_session: AsyncSession):
+    await state.clear()
+    msg = event.message if isinstance(event, CallbackQuery) else event
+    if isinstance(event, CallbackQuery):
+        await event.answer("🔄 تم إعادة تشغيل البوت وتصفير الجلسة بنجاح!", show_alert=True)
+    await send_welcome_panel(msg, db_session)
 
 @router.callback_query(F.data == "check_sub")
 async def handle_check_subscription(callback: CallbackQuery, db_session: AsyncSession):

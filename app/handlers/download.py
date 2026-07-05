@@ -249,6 +249,19 @@ async def prompt_quality_selection(
                 pass
             
     keyboard_buttons = []
+    
+    import os
+    from aiogram.types import WebAppInfo
+    webapp_domain = config.WEBAPP_BASE_URL or os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+    if webapp_domain and not webapp_domain.startswith("http"):
+        webapp_domain = f"https://{webapp_domain}"
+        
+    if webapp_domain:
+        q_webapp_url = f"{webapp_domain}/webapp/qualities?db_cache_id={db_cache_id}&anilist_id={anilist_id}&ep_number={ep_number}"
+        keyboard_buttons.append([
+            InlineKeyboardButton(text="📱 اختر الجودة في الميني أب (Mini App)", web_app=WebAppInfo(url=q_webapp_url))
+        ])
+
     q_keys = list(qualities.keys())
     import re
     def get_q_res(k):
