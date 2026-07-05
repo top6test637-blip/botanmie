@@ -152,20 +152,20 @@ async def _process_single_task_wrapper(
     bot: Bot,
     db_session_factory
 ):
-    try:
-        success = await execute_queued_task(
-            task_id, user_id, chat_id, message_id, anilist_id, anime_title, episode_num, quality, bot, db_session_factory
-        )
-        async with db_session_factory() as session:
-            stmt = select(PersistentTaskQueue).where(PersistentTaskQueue.id == task_id)
-            res = await session.execute(stmt)
-            db_task = res.scalar_one_or_none()
-            if db_task:
-                db_task.status = "completed" if success else "failed"
-                db_task.updated_at = datetime.now(timezone.utc)
-                await session.commit()
-    except Exception as e:
-        logger.exception(f"Error processing task ID {task_id}")
+        try:
+            success = await asyncio.wait_for(
+                execute_queued_task(
+                    task_id, user_id, chat_id, message_id, anilist_id, anime_title, episode_num, quality, bot, db_session_factory
+                ),
+                timeout=600  # 10 دقائق كحد أقصى
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Task {task_id} timed out after 600 seconds")
+            success = False
+        except Exception as e:
+            logger.exception(f"Error processing task ID {task_id}")
+            success = False
+
         async with db_session_factory() as session:
             stmt = select(PersistentTaskQueue).where(PersistentTaskQueue.id == task_id)
             res = await session.execute(stmt)

@@ -100,20 +100,20 @@ def decrypt_episodes(processed_episode_data: str) -> List[Dict[str, Any]]:
 def unpack_dean_edwards(packed_text: str) -> str:
     """Unpacks Dean Edwards packed Javascript block in Python."""
     try:
-        # Match variables in: }('p_content', a, c, 'k_content'.split('|'))
         pattern = r"\}\s*\(\s*(['\"].*?['\"])\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(['\"].*?['\"])\s*\.split\(['\"]\|['\"]\)\)"
         match = re.search(pattern, packed_text, re.DOTALL)
         if not match:
+            # محاولة استخراج الرابط مباشرة من النص
+            direct = re.search(r'(?:src|file|url)\s*[:=]\s*[\'"](https?://[^\'"]+\.(?:m3u8|mp4)[^\'"]*)[\'"]', packed_text)
+            if direct:
+                return direct.group(1)
             return ""
             
         p_raw, a_str, c_str, k_raw = match.groups()
         a = int(a_str)
         c = int(c_str)
-        
-        # Strip quotes and handle escaped quotes
         p = p_raw[1:-1]
         p = re.sub(r'\\(["\'])', r'\1', p)
-        
         k_content = k_raw[1:-1]
         k = k_content.split("|")
         
@@ -136,17 +136,11 @@ def unpack_dean_edwards(packed_text: str) -> str:
             return word
 
         unpacked = re.sub(r"\b\w+\b", replace_word, p)
+        if unpacked:
+            return unpacked
     except Exception:
         logger.exception("Error in process: failed to unpack Dean Edwards packed JS")
-        return ""
-
-try:
-    from curl_cffi.requests import AsyncSession as CurlAsyncSession
-    CURL_CFFI_AVAILABLE = True
-except ImportError:
-    CURL_CFFI_AVAILABLE = False
-    CurlAsyncSession = None
-
+    return ""
 GLOBAL_COOKIE_JAR: Optional[aiohttp.CookieJar] = None
 
 def get_global_cookie_jar() -> aiohttp.CookieJar:
@@ -221,10 +215,19 @@ async def get_html(url: str, session: Any) -> str:
     """Fetches HTML content with browser headers and cookie session."""
     status, _, text, _ = await session_get_response(session, url, timeout=12)
     if status == 403:
-        logger.warning(f"HTTP 403 Forbidden encountered on {url}. Cloudflare protection active.")
+        logger.warning(f"HTTP 403 Forbidden on {url}. Falling back to Playwright...")
+        html = await get_html_headless(url)
+        if html:
+            return html
         return "STATUS_403_FORBIDDEN"
     if status == 200:
         return text
+    # إذا فشل aiohttp/curl، حاول Playwright أيضاً
+    if status == 0 or not text:
+        logger.warning(f"HTTP status {status}, trying Playwright fallback for {url}")
+        html = await get_html_headless(url)
+        if html:
+            return html
     logger.warning(f"HTTP status {status} fetching {url}")
     return ""
 
@@ -344,7 +347,9 @@ async def _run_scraper_search(session: Any, title: str, search_queries: List[str
     slug_candidates = [
         possible_slug,
         f"{possible_slug}-tv",
-        f"{possible_slug}-season-1"
+        f"{possible_slug}-season-1",
+        possible_slug.replace("-", ""),  # بدون شرطات
+        possible_slug.replace("-", " ").title().replace(" ", "-"),  # بتنسيق title
     ]
     for domain in WITANIME_DOMAINS:
         for slug_cand in slug_candidates:
@@ -1056,7 +1061,9 @@ async def _run_get_download_links(session: Any, play_url: str) -> Dict[str, str]
         if "witanime.you" in play_url:
             play_url = play_url.replace("https://witanime.you", f"https://{WITANIME_DOMAIN}")
             
-        url_domains = ["witanime.life", "witanime.pics", "witanime.site", "witanime.red", "witanime.com"]
+        # استبدل هذه القائمة
+        
+        url_domains = ["witanime.life", "witanime.pics"]  # فقط النطاقات المعروفة بالعمل
         
         # Extract current domain from play_url
         current_domain = None
@@ -1191,9 +1198,10 @@ async def _parse_standard_watch_page(html: str, soup: BeautifulSoup, session: An
         for a in download_btns:
             href = a.get("href")
             if href and href.startswith("http"):
-                label = (a.text.strip() + " " + str(a.get("class", "")) + " " + href).lower()
-                if not any(x in href.lower() for x in ["go.witanime", "/go/", "download", "mp4upload", "mega", "drive", "4shared", "gofile", "videa", "ok.ru", "mail.ru", "streamwish"]):
+                # تخطي الروابط غير المدعومة
+                if any(x in href for x in ["mega.nz", "drive.google.com", "4shared", "gofile"]):
                     continue
+                # باقي الكود...
                     
                 q_name = normalize_quality_name(label)
                 if q_name not in ["1080p", "720p", "480p", "360p", "240p"]:
@@ -1320,7 +1328,7 @@ async def try_fetch_anime_page_with_fallbacks(session: Any, anime_slug: str) -> 
     if stripped and stripped not in slug_variations:
         slug_variations.append(stripped)
         
-    domains_to_try = ["witanime.life", "witanime.pics", "witanime.site", "witanime.red", "witanime.com"]
+    domains_to_try = ["witanime.life", "witanime.pics"]
     
     for slug in slug_variations:
         for domain in domains_to_try:

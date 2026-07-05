@@ -217,6 +217,14 @@ async def prompt_quality_selection(
             status_msg_id = status_msg.message_id
             
         scraped_links = await get_download_links_scraper(play_url)
+        if not scraped_links:
+            logger.error(f"DIAGNOSTIC: Failed to resolve qualities for {play_url}.")
+            await bot.edit_message_text(
+                f"⚠️ لم نتمكن من العثور على روابط تحميل لهذه الحلقة. قد يكون الخادم غير متاح حالياً. حاول مرة أخرى لاحقاً أو اختر جودة أخرى.",
+                chat_id=chat_id,
+                message_id=status_msg_id
+            )
+            return False
         
         if not scraped_links:
             logger.error(f"DIAGNOSTIC: Failed to resolve qualities for {play_url}. Deep scan returned empty.")
