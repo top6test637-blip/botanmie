@@ -369,7 +369,8 @@ async def search_anime_scraper(title: str) -> List[Dict[str, Any]]:
     
     if CURL_CFFI_AVAILABLE and CurlAsyncSession:
         logger.info("Using curl_cffi TLS Impersonation (chrome120) for Cloudflare bypass.")
-        async with CurlAsyncSession(impersonate="chrome120") as session:
+        proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
+        async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
             return await _run_scraper_search(session, title, search_queries)
     else:
         connector = get_connector()
@@ -390,7 +391,8 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
 
     if CURL_CFFI_AVAILABLE and CurlAsyncSession:
         logger.info("Using curl_cffi for get_episodes_scraper")
-        async with CurlAsyncSession(impersonate="chrome120") as session:
+        proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
+        async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
             return await _run_get_episodes(session, anime_slug)
     else:
         connector = get_connector()
@@ -981,7 +983,8 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
 
     if CURL_CFFI_AVAILABLE and CurlAsyncSession:
         logger.info("Using curl_cffi for get_download_links_scraper")
-        async with CurlAsyncSession(impersonate="chrome120") as session:
+        proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
+        async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
             return await _run_get_download_links(session, play_url)
     else:
         connector = get_connector()
