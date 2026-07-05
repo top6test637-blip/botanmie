@@ -485,6 +485,7 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
             return gogo_data
 
     return result
+
 async def _run_get_episodes(session: Any, anime_slug: str) -> Dict[str, Any]:
     episodes = []
     seen_urls = set()
