@@ -12,46 +12,83 @@ class SubscriptionMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
-        # Check if CHANNEL_USERNAME is configured
-        if not config.CHANNEL_USERNAME:
-            return await handler(event, data)
-            
         # Extract user
         user = None
         if isinstance(event, Message):
             user = event.from_user
-            # Allow /start command to pass through
-            if event.text and event.text.startswith("/start"):
-                return await handler(event, data)
         elif isinstance(event, CallbackQuery):
             user = event.from_user
-            # Allow verification and menu callback to pass through
-            if event.data == "check_sub" or event.data.startswith("menu_"):
-                return await handler(event, data)
-                
+            
         if not user:
             return await handler(event, data)
-            
-        # Super admin bypass
-        if user.id == config.SUPER_ADMIN_ID:
-            return await handler(event, data)
-            
-        # Admin bypass (check from bot_admins db table)
+
+        bot = data["bot"]
         db_session = data.get("db_session")
+
+        # 1. Register/Update User and Notify Admins on first interaction
         if db_session:
             try:
+                from app.database.models import User
                 from sqlalchemy import select
-                from app.database.models import BotAdmin
-                stmt = select(BotAdmin).where(BotAdmin.user_id == user.id)
-                res = await db_session.execute(stmt)
-                is_db_admin = res.scalar_one_or_none() is not None
-                if is_db_admin:
-                    return await handler(event, data)
+                stmt_user = select(User).where(User.user_id == user.id)
+                res_user = await db_session.execute(stmt_user)
+                existing_user = res_user.scalar_one_or_none()
+                if not existing_user:
+                    new_user = User(
+                        user_id=user.id,
+                        username=user.username,
+                        first_name=user.first_name,
+                        last_name=user.last_name,
+                        is_blocked=False
+                    )
+                    db_session.add(new_user)
+                    await db_session.commit()
+                    from app.utils.logging_config import logger
+                    logger.info(f"Registered new user in database from middleware: {user.id}")
+                    
+                    # Notify admins
+                    try:
+                        from app.database.models import BotAdmin
+                        stmt_admins = select(BotAdmin.user_id)
+                        res_admins = await db_session.execute(stmt_admins)
+                        admin_ids = list(res_admins.scalars().all())
+                        admin_ids.append(config.SUPER_ADMIN_ID)
+                        admin_ids = list(set(admin_ids))
+                        
+                        name_str = f"{user.first_name or ''} {user.last_name or ''}".strip() or "لا يوجد اسم"
+                        user_link = f"<a href='tg://user?id={user.id}'>{name_str}</a>"
+                        notif_text = (
+                            f"👤 <b>مستخدم جديد دخل البوت! | New User Joined</b>\n\n"
+                            f"• <b>الاسم:</b> {user_link}\n"
+                            f"• <b>المعرف (ID):</b> <code>{user.id}</code>\n"
+                            f"• <b>اليوزر نيم:</b> @{user.username or 'لا يوجد'}"
+                        )
+                        for admin_id in admin_ids:
+                            try:
+                                await bot.send_message(chat_id=admin_id, text=notif_text, parse_mode="HTML")
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+                else:
+                    existing_user.username = user.username
+                    existing_user.first_name = user.first_name
+                    existing_user.last_name = user.last_name
+                    existing_user.is_blocked = False
+                    db_session.add(existing_user)
+                    await db_session.commit()
             except Exception:
                 pass
-                
-        # Perform member check in the channel
-        bot = data["bot"]
+
+        # Check if CHANNEL_USERNAME is configured
+        if not config.CHANNEL_USERNAME:
+            return await handler(event, data)
+
+        # Allow verification callback to pass through
+        if isinstance(event, CallbackQuery) and event.data == "check_sub":
+            return await handler(event, data)
+
+        # Check membership in the channel
         try:
             member = await bot.get_chat_member(chat_id=config.CHANNEL_USERNAME, user_id=user.id)
             if member.status in ("member", "administrator", "creator"):
