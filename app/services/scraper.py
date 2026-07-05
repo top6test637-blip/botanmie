@@ -129,6 +129,8 @@ def unpack_dean_edwards(packed_text: str) -> str:
         logger.exception("Error in process: failed to unpack Dean Edwards packed JS")
         return ""
 
+GLOBAL_COOKIE_JAR = aiohttp.CookieJar()
+
 WITANIME_DOMAINS = ["witanime.life", "witanime.pics", "witanime.com", "witanime.red", "witanime.site"]
 
 def get_browser_headers(referer: str = f"https://{WITANIME_DOMAIN}/") -> dict:
@@ -155,6 +157,8 @@ async def harvest_session_cookies(domain: str, session: aiohttp.ClientSession):
         async with session.get(base_url, headers=headers, ssl=False, timeout=6) as resp:
             if resp.status == 200:
                 logger.info(f"Successfully harvested session cookies from {domain}")
+            elif resp.status == 403:
+                logger.warning(f"Session cookie harvest on {domain} encountered 403 Forbidden.")
     except Exception as e:
         logger.warning(f"Failed harvesting cookies from {domain}: {e}")
 
@@ -168,6 +172,9 @@ async def get_html(url: str, session: aiohttp.ClientSession) -> str:
         async with session.get(url, headers=headers, ssl=False, timeout=12) as response:
             if response.status == 200:
                 return await response.text()
+            elif response.status == 403:
+                logger.warning(f"HTTP 403 Forbidden encountered on {url}. Cloudflare protection active.")
+                return "STATUS_403_FORBIDDEN"
             logger.warning(f"HTTP status {response.status} fetching {url}")
             return ""
     except Exception as e:
@@ -249,13 +256,22 @@ async def search_anime_scraper(title: str) -> List[Dict[str, Any]]:
     ]
     
     connector = get_connector()
-    async with aiohttp.ClientSession(connector=connector) as session:
-        for domain in WITANIME_DOMAINS:
+    async with aiohttp.ClientSession(connector=connector, cookie_jar=GLOBAL_COOKIE_JAR) as session:
+        for idx, domain in enumerate(WITANIME_DOMAINS):
+            if idx > 0:
+                await asyncio.sleep(1.5)  # Rate-limit mitigation delay
+                
             await harvest_session_cookies(domain, session)
+            is_403_blocked = False
+            
             for q_path in search_queries:
                 search_url = f"https://{domain}/{q_path.lstrip('/')}"
                 try:
                     html = await get_html(search_url, session)
+                    if html == "STATUS_403_FORBIDDEN":
+                        logger.warning(f"Domain {domain} returned 403 Forbidden. Aborting further domain query loops.")
+                        is_403_blocked = True
+                        break
                     if not html:
                         continue
                     soup = BeautifulSoup(html, "html.parser")
