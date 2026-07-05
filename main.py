@@ -344,7 +344,11 @@ async def webhook_endpoint(request: Request):
         return {"status": "not_initialized"}
     update_data = await request.json()
     update = Update.model_validate(update_data, context={"bot": bot})
-    await dp.feed_update(bot, update)
+    
+    # Process the update asynchronously in the background.
+    # This responds to Telegram instantly, preventing connection timeouts and duplicate retry loops.
+    asyncio.create_task(dp.feed_update(bot, update))
+    
     return {"status": "ok"}
 
 @app.get("/health")
