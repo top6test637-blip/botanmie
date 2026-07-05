@@ -15,6 +15,7 @@ from app.database.models import EpisodeCache, DownloadCache, SearchCache
 from app.services.scraper import search_anime_scraper, get_episodes_scraper, get_download_links_scraper
 from app.services.downloader import process_and_send_video
 from app.utils.logging_config import logger
+from app.utils.telegram import safe_answer
 
 router = Router(name="download")
 
@@ -316,6 +317,8 @@ async def handle_download_callback(callback: CallbackQuery, db_session: AsyncSes
     """
     Triggers download from selected quality or enqueues task in PersistentTaskQueue.
     """
+    await safe_answer(callback)
+    
     parts = callback.data.split(":")
     requested_quality = parts[1]
     cache_id = int(parts[2])
@@ -326,10 +329,14 @@ async def handle_download_callback(callback: CallbackQuery, db_session: AsyncSes
     dl_cache = res.scalar_one_or_none()
     
     if not dl_cache:
-        await callback.answer("❌ انتهت صلاحية رابط تحميل الحلقة. يرجى إعادة البحث.", show_alert=True)
+        try:
+            await callback.message.edit_text("❌ انتهت صلاحية رابط تحميل الحلقة. يرجى إعادة البحث.")
+        except Exception:
+            try:
+                await callback.message.answer("❌ انتهت صلاحية رابط تحميل الحلقة. يرجى إعادة البحث.")
+            except Exception:
+                pass
         return
-        
-    await callback.answer()
     
     # Resolve anilist_id and anime_title/ep_num
     play_url = dl_cache.play_url
@@ -413,7 +420,7 @@ async def handle_nav_ep(callback: CallbackQuery, db_session: AsyncSession):
     anilist_id = int(parts[1])
     ep_num = parts[2]
     
-    await callback.answer()
+    await safe_answer(callback)
     
     # Retrieve play_url
     stmt = select(EpisodeCache).where(
@@ -455,7 +462,7 @@ async def handle_nav_grid(callback: CallbackQuery, db_session: AsyncSession):
     parts = callback.data.split(":")
     anilist_id = int(parts[1])
     
-    await callback.answer()
+    await safe_answer(callback)
     
     from app.handlers.search import render_episode_keyboard
     await render_episode_keyboard(

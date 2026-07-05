@@ -12,6 +12,7 @@ from config import config
 from app.database.models import BotAdmin
 from app.utils.auth import is_admin
 from app.utils.logging_config import logger
+from app.utils.telegram import safe_answer
 
 class AdminStates(StatesGroup):
     waiting_for_broadcast = State()
@@ -574,10 +575,10 @@ async def cmd_admin(message: Message, db_session: AsyncSession):
 async def handle_admin_stats(callback: CallbackQuery, db_session: AsyncSession):
     authorized = await is_admin(callback.from_user.id, db_session)
     if not authorized:
-        await callback.answer("❌ غير مصرح لك.", show_alert=True)
+        await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
         return
         
-    await callback.answer()
+    await safe_answer(callback)
     
     # 1. Total users
     from app.database.models import User, DownloadCache
@@ -616,10 +617,10 @@ async def handle_admin_stats(callback: CallbackQuery, db_session: AsyncSession):
 async def handle_admin_home(callback: CallbackQuery, db_session: AsyncSession):
     authorized = await is_admin(callback.from_user.id, db_session)
     if not authorized:
-        await callback.answer("❌ غير مصرح لك.", show_alert=True)
+        await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
         return
         
-    await callback.answer()
+    await safe_answer(callback)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -644,10 +645,10 @@ async def handle_admin_home(callback: CallbackQuery, db_session: AsyncSession):
 async def handle_admin_broadcast(callback: CallbackQuery, db_session: AsyncSession, state: FSMContext):
     authorized = await is_admin(callback.from_user.id, db_session)
     if not authorized:
-        await callback.answer("❌ غير مصرح لك.", show_alert=True)
+        await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
         return
         
-    await callback.answer()
+    await safe_answer(callback)
     await state.set_state(AdminStates.waiting_for_broadcast)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -700,10 +701,10 @@ async def process_admin_broadcast(message: Message, db_session: AsyncSession, st
 async def handle_admin_toggle_sub(callback: CallbackQuery, db_session: AsyncSession):
     authorized = await is_admin(callback.from_user.id, db_session)
     if not authorized:
-        await callback.answer("❌ غير مصرح لك.", show_alert=True)
+        await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
         return
         
-    await callback.answer()
+    await safe_answer(callback)
     
     active_channel = config.CHANNEL_USERNAME or "تعطيل / Disabled"
     
@@ -728,13 +729,13 @@ async def handle_admin_toggle_sub(callback: CallbackQuery, db_session: AsyncSess
 async def handle_admin_disable_sub(callback: CallbackQuery, db_session: AsyncSession):
     authorized = await is_admin(callback.from_user.id, db_session)
     if not authorized:
-        await callback.answer("❌ غير مصرح لك.", show_alert=True)
+        await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
         return
         
     config.CHANNEL_USERNAME = None
     from app.utils.settings import delete_setting
     await delete_setting("channel_username")
-    await callback.answer("✅ تم تعطيل الاشتراك الإجباري بنجاح.", show_alert=True)
+    await safe_answer(callback, "✅ تم تعطيل الاشتراك الإجباري بنجاح.", show_alert=True)
     await handle_admin_toggle_sub(callback, db_session)
 
 
@@ -742,10 +743,10 @@ async def handle_admin_disable_sub(callback: CallbackQuery, db_session: AsyncSes
 async def handle_admin_change_channel(callback: CallbackQuery, db_session: AsyncSession, state: FSMContext):
     authorized = await is_admin(callback.from_user.id, db_session)
     if not authorized:
-        await callback.answer("❌ غير مصرح لك.", show_alert=True)
+        await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
         return
         
-    await callback.answer()
+    await safe_answer(callback)
     await state.set_state(AdminStates.waiting_for_channel)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -782,10 +783,10 @@ async def process_admin_channel(message: Message, db_session: AsyncSession, stat
 async def handle_admin_set_bg(callback: CallbackQuery, db_session: AsyncSession, state: FSMContext):
     authorized = await is_admin(callback.from_user.id, db_session)
     if not authorized:
-        await callback.answer("❌ غير مصرح لك.", show_alert=True)
+        await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
         return
         
-    await callback.answer()
+    await safe_answer(callback)
     await state.set_state(AdminStates.waiting_for_bg_photo)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[

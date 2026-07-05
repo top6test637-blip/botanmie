@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import config
 from aiogram.exceptions import TelegramBadRequest
+from app.utils.telegram import safe_answer
 
 router = Router(name="start")
 
@@ -195,7 +196,7 @@ async def handle_check_subscription(callback: CallbackQuery, db_session: AsyncSe
     user_id = callback.from_user.id
     
     if not config.CHANNEL_USERNAME:
-        await callback.answer("تم التحقق بنجاح! البوت مفعل للجميع.")
+        await safe_answer(callback, "تم التحقق بنجاح! البوت مفعل للجميع.")
         try:
             await callback.bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
         except Exception:
@@ -206,18 +207,18 @@ async def handle_check_subscription(callback: CallbackQuery, db_session: AsyncSe
     try:
         member = await bot.get_chat_member(chat_id=config.CHANNEL_USERNAME, user_id=user_id)
         if member.status in ("member", "administrator", "creator"):
-            await callback.answer("✅ تم التحقق بنجاح! شكراً لاشتراكك.", show_alert=True)
+            await safe_answer(callback, "✅ تم التحقق بنجاح! شكراً لاشتراكك.", show_alert=True)
             try:
                 await callback.bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
             except Exception:
                 pass
             await send_welcome_panel(callback.message, db_session)
         else:
-            await callback.answer("❌ لم تشترك في القناة بعد! يرجى الاشتراك أولاً.", show_alert=True)
+            await safe_answer(callback, "❌ لم تشترك في القناة بعد! يرجى الاشتراك أولاً.", show_alert=True)
     except Exception:
         from app.utils.logging_config import logger
         logger.warning(f"Error checking sub in callback for user {user_id}")
-        await callback.answer("✅ تم التفعيل بنجاح!")
+        await safe_answer(callback, "✅ تم التفعيل بنجاح!")
         try:
             await callback.bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
         except Exception:
@@ -226,7 +227,7 @@ async def handle_check_subscription(callback: CallbackQuery, db_session: AsyncSe
 
 @router.callback_query(F.data == "menu_search")
 async def handle_menu_search(callback: CallbackQuery):
-    await callback.answer()
+    await safe_answer(callback)
     try:
         await callback.message.edit_text("🔍 **أرسل اسم الأنمي الذي تريد البحث عنه الآن (بالعربية أو الإنجليزية):**", parse_mode="Markdown")
     except TelegramBadRequest:
@@ -234,7 +235,7 @@ async def handle_menu_search(callback: CallbackQuery):
 
 @router.callback_query(F.data == "menu_suggest")
 async def handle_menu_suggest(callback: CallbackQuery):
-    await callback.answer()
+    await safe_answer(callback)
     suggested = random.choice(SUGGESTIONS)
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=f"🔍 ابحث عن {suggested}", callback_data=f"suggest_search:{suggested}")],
@@ -259,7 +260,7 @@ async def handle_menu_suggest(callback: CallbackQuery):
 
 @router.callback_query(F.data.startswith("suggest_search:"))
 async def handle_suggest_search(callback: CallbackQuery, db_session: AsyncSession, state: FSMContext):
-    await callback.answer()
+    await safe_answer(callback)
     query = callback.data.split(":", 1)[1]
     from app.handlers.search import handle_anime_search
     fake_msg = Message(
@@ -273,7 +274,7 @@ async def handle_suggest_search(callback: CallbackQuery, db_session: AsyncSessio
 
 @router.callback_query(F.data == "menu_favorites")
 async def handle_menu_favorites(callback: CallbackQuery, db_session: AsyncSession):
-    await callback.answer()
+    await safe_answer(callback)
     user_id = callback.from_user.id
     from sqlalchemy import select
     from app.database.models import UserFavorites
@@ -300,7 +301,7 @@ async def handle_menu_favorites(callback: CallbackQuery, db_session: AsyncSessio
 
 @router.callback_query(F.data == "menu_support")
 async def handle_menu_support(callback: CallbackQuery):
-    await callback.answer()
+    await safe_answer(callback)
     support_text = (
         "🛠️ <b>الدعم الفني والتواصل:</b>\n\n"
         "إذا واجهتك أي مشكلة في استخدام البوت أو استخراج الروابط، يرجى التواصل معنا عبر المعرف التالي:\n"
@@ -316,7 +317,7 @@ async def handle_menu_support(callback: CallbackQuery):
 
 @router.callback_query(F.data == "menu_help")
 async def handle_menu_help(callback: CallbackQuery):
-    await callback.answer()
+    await safe_answer(callback)
     help_text = (
         "ℹ️ <b>دليل وتعليمات استخدام البوت كعضو:</b>\n\n"
         "🤖 <b>الأوامر المتاحة لك:</b>\n"
@@ -341,7 +342,7 @@ async def handle_menu_help(callback: CallbackQuery):
 
 @router.callback_query(F.data == "menu_ads")
 async def handle_menu_ads(callback: CallbackQuery):
-    await callback.answer()
+    await safe_answer(callback)
     ads_text = (
         "📢 <b>للإعلانات والتمويل والتبرع:</b>\n\n"
         "لدعم استمرار خوادم البوت وتطويره، أو لطلب مساحات إعلانية داخل البوت والقناة، يرجى التواصل مع الإدارة:\n"

@@ -13,6 +13,7 @@ from app.database.models import SearchCache, UserFavorites, EpisodeCache
 from app.services.anilist import search_anilist
 from app.services.scraper import search_anime_scraper, get_episodes_scraper, ScraperError
 from app.utils.logging_config import logger
+from app.utils.telegram import safe_answer
 
 router = Router(name="search")
 
@@ -149,6 +150,8 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
     Handles anime selection from the keyboard.
     Loads and caches episodes, calculates ranges, and prompts the user in Arabic.
     """
+    await safe_answer(callback)
+    
     anilist_id = int(callback.data.split(":")[1])
     logger.info(f"اختيار أنمي (معرف أنيليست: {anilist_id}، معرف المستخدم: {callback.from_user.id})")
     
@@ -159,7 +162,13 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
     
     if not cache_entry:
         logger.warning(f"لم يتم العثور على كاش للأنمي: {anilist_id}")
-        await callback.answer("❌ تفاصيل الأنمي غير موجودة في الكاش. يرجى البحث مجدداً.", show_alert=True)
+        try:
+            await callback.message.edit_text("❌ تفاصيل الأنمي غير موجودة في الكاش. يرجى البحث مجدداً.")
+        except Exception:
+            try:
+                await callback.message.edit_caption(caption="❌ تفاصيل الأنمي غير موجودة في الكاش. يرجى البحث مجدداً.")
+            except Exception:
+                pass
         return
         
     title = cache_entry.title_english or cache_entry.title_romaji
@@ -322,8 +331,6 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
         duration=cache_entry.duration or (scraped_data.get("duration") if scraped_data else None)
     )
     
-    await callback.answer()
-
     await render_episode_keyboard(
         bot=callback.bot,
         chat_id=callback.message.chat.id,
@@ -462,7 +469,7 @@ async def handle_ep_block(callback: CallbackQuery, db_session: AsyncSession):
     anilist_id = int(parts[1])
     start = int(parts[2])
     end = int(parts[3])
-    await callback.answer()
+    await safe_answer(callback)
     await render_episode_keyboard(
         bot=callback.bot,
         chat_id=callback.message.chat.id,
@@ -478,7 +485,7 @@ async def handle_ep_block(callback: CallbackQuery, db_session: AsyncSession):
 async def handle_ep_blocks_home(callback: CallbackQuery, db_session: AsyncSession):
     parts = callback.data.split(":")
     anilist_id = int(parts[1])
-    await callback.answer()
+    await safe_answer(callback)
     await render_episode_keyboard(
         bot=callback.bot,
         chat_id=callback.message.chat.id,
@@ -495,7 +502,7 @@ async def handle_sel_ep_click(callback: CallbackQuery, db_session: AsyncSession)
     anilist_id = int(parts[1])
     ep_num = parts[2]
     
-    await callback.answer()
+    await safe_answer(callback)
     
     from app.handlers.download import prompt_quality_selection
     
@@ -548,7 +555,7 @@ async def handle_add_favorite(callback: CallbackQuery, db_session: AsyncSession)
 
     if not cache_entry:
         logger.warning(f"تفاصيل الأنمي غير موجودة لإضافتها للمفضلة: {anilist_id}")
-        await callback.answer("❌ تفاصيل الأنمي غير متوفرة في الكاش. يرجى البحث مجدداً.", show_alert=True)
+        await safe_answer(callback, "❌ تفاصيل الأنمي غير متوفرة في الكاش. يرجى البحث مجدداً.", show_alert=True)
         return
 
     title = cache_entry.title_english or cache_entry.title_romaji
@@ -564,7 +571,7 @@ async def handle_add_favorite(callback: CallbackQuery, db_session: AsyncSession)
 
     if existing_fav:
         logger.info(f"الأنمي '{title}' موجود بالفعل في المفضلة للمستخدم: {user_id}")
-        await callback.answer(f"⭐ '{title}' موجود بالفعل في مفضلتك!", show_alert=False)
+        await safe_answer(callback, f"⭐ '{title}' موجود بالفعل في مفضلتك!", show_alert=False)
         return
 
     # Add to favorites
@@ -578,18 +585,18 @@ async def handle_add_favorite(callback: CallbackQuery, db_session: AsyncSession)
         await db_session.commit()
         
         logger.info(f"تمت إضافة '{title}' للمفضلة بنجاح للمستخدم: {user_id}")
-        await callback.answer(f"✅ تم إضافة '{title}' إلى المفضلة!", show_alert=False)
+        await safe_answer(callback, f"✅ تم إضافة '{title}' إلى المفضلة!", show_alert=False)
     except Exception as e:
         logger.exception("خطأ أثناء إضافة المفضلة")
         await db_session.rollback()
         import html
-        await callback.answer(f"❌ فشل الحفظ: {html.escape(str(e))}", show_alert=True)
+        await safe_answer(callback, f"❌ فشل الحفظ: {html.escape(str(e))}", show_alert=True)
 
 
 @router.callback_query(F.data.startswith("more_results:"))
 async def handle_more_results(callback: CallbackQuery, db_session: AsyncSession):
     """Expards the search results keyboard to show all cached results (up to 10)."""
-    await callback.answer()
+    await safe_answer(callback)
     query = callback.data.split(":", 1)[1]
     
     # Retrieve all cached results from DB
@@ -637,7 +644,7 @@ async def handle_more_results(callback: CallbackQuery, db_session: AsyncSession)
 @router.callback_query(F.data.startswith("back_to_search:"))
 async def handle_back_to_search(callback: CallbackQuery, db_session: AsyncSession):
     anilist_id = int(callback.data.split(":")[1])
-    await callback.answer()
+    await safe_answer(callback)
     
     # 1. Get search query from cache
     stmt = select(SearchCache).where(SearchCache.anilist_id == anilist_id)
