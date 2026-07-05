@@ -105,13 +105,22 @@ async def cmd_start(message: Message, db_session: AsyncSession, state: FSMContex
                     anilist_id = ep_entry.anilist_id if ep_entry else 0
                     ep_number = ep_entry.ep_number if ep_entry else "1"
                     
-                    from config import config
-                    from aiogram.types import WebAppInfo
-                    webapp_url = f"{config.WEBAPP_BASE_URL}/webapp/qualities?db_cache_id={dl_cache.id}&anilist_id={anilist_id}&ep_number={ep_number}"
+                    keyboard_buttons = []
+                    q_keys = list(dl_cache.qualities.keys())
+                    import re
+                    def get_q_res(k):
+                        m = re.search(r'(\d+)', k)
+                        return int(m.group(1)) if m else 0
+                    q_keys.sort(key=get_q_res, reverse=True)
                     
-                    keyboard_buttons = [
-                        [InlineKeyboardButton(text="⚙️ اختر الجودة", web_app=WebAppInfo(url=webapp_url))]
-                    ]
+                    row = []
+                    for q_name in q_keys:
+                        row.append(InlineKeyboardButton(text=f"⚙️ {q_name}", callback_data=f"dl:{q_name}:{dl_cache.id}"))
+                        if len(row) == 2:
+                            keyboard_buttons.append(row)
+                            row = []
+                    if row:
+                        keyboard_buttons.append(row)
                     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
                     
                     anime_title = "أنمي"

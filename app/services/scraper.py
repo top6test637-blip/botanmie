@@ -17,6 +17,18 @@ class ScraperError(Exception):
     """Base exception for scraping operations."""
     pass
 
+def safe_b64decode(data: str) -> bytes:
+    """Safely decodes Base64 data, adding missing padding and stripping illegal characters."""
+    if isinstance(data, str):
+        data_str = data.strip()
+    else:
+        data_str = data.decode("utf-8", errors="ignore").strip()
+    data_str = re.sub(r'[^A-Za-z0-9+/=]', '', data_str)
+    missing_padding = len(data_str) % 4
+    if missing_padding:
+        data_str += '=' * (4 - missing_padding)
+    return base64.b64decode(data_str)
+
 def normalize_quality_name(name: str) -> str:
     name = name.lower().strip()
     if "1080" in name or "fhd" in name or "high" in name:
@@ -37,11 +49,11 @@ def decrypt_resource(resource_data: str, config_settings: Dict[str, Any]) -> str
         reversed_data = resource_data[::-1]
         reversed_data = re.sub(r'[^A-Za-z0-9+/=]', '', reversed_data)
         
-        index_key_bytes = base64.b64decode(config_settings["k"])
+        index_key_bytes = safe_b64decode(config_settings["k"])
         index_key = index_key_bytes.decode("utf-8")
         param_offset = config_settings["d"][int(index_key)]
         
-        decoded_bytes = base64.b64decode(reversed_data)
+        decoded_bytes = safe_b64decode(reversed_data)
         if param_offset > 0:
             decoded_bytes = decoded_bytes[:-param_offset]
         decoded_resource = decoded_bytes.decode("utf-8")
@@ -58,8 +70,8 @@ def decrypt_episodes(processed_episode_data: str) -> List[Dict[str, Any]]:
     """Decrypts TV series episode list stored in processedEpisodeData."""
     try:
         parts = processed_episode_data.split('.')
-        data_bytes = base64.b64decode(parts[0])
-        key_bytes = base64.b64decode(parts[1])
+        data_bytes = safe_b64decode(parts[0])
+        key_bytes = safe_b64decode(parts[1])
         
         decrypted_chars = []
         for i in range(len(data_bytes)):
@@ -361,7 +373,7 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
             encoded_match = re.search(r"var encodedEpisodeData = '([^']+)';", html)
             if encoded_match:
                 try:
-                    decoded_json = base64.b64decode(encoded_match.group(1)).decode("utf-8")
+                    decoded_json = safe_b64decode(encoded_match.group(1)).decode("utf-8")
                     episodes_data = json.loads(decoded_json)
                     logger.info(f"Decoded {len(episodes_data)} episodes from encodedEpisodeData")
                 except Exception:
@@ -500,7 +512,7 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
                     S[i], S[j] = S[j], S[i]
                 i = 0
                 j = 0
-                cipher_text = base64.b64decode(body)
+                cipher_text = safe_b64decode(body)
                 for m in range(len(cipher_text)):
                     i = (i + 1) % 256
                     j = (j + S[i]) % 256
@@ -604,7 +616,7 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
                     
                     for b64_str in b64_matches:
                         try:
-                            decoded_url = base64.b64decode(b64_str).decode("utf-8")
+                            decoded_url = safe_b64decode(b64_str).decode("utf-8")
                             logger.info(f"Decoded yonaplay player option: {decoded_url}")
                             
                             # Prioritize dotplay.net
@@ -623,7 +635,7 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
                                         if api_resp.status == 200:
                                             data = await api_resp.json()
                                             if data.get("success") and data.get("video_url"):
-                                                dec_url = base64.b64decode(data["video_url"]).decode("utf-8").split("|")[0]
+                                                dec_url = safe_b64decode(data["video_url"]).decode("utf-8").split("|")[0]
                                                 logger.info(f"Resolved video URL from dotplay: {dec_url}")
                                                 return dec_url
                         except Exception as e:
@@ -771,8 +783,8 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
             if not zx_match or not zk_match:
                 raise ScraperError("Failed to locate player registries (_zX / _zK) on watch page")
                 
-            resources = json.loads(base64.b64decode(zx_match.group(1)).decode("utf-8"))
-            configs = json.loads(base64.b64decode(zk_match.group(1)).decode("utf-8"))
+            resources = json.loads(safe_b64decode(zx_match.group(1)).decode("utf-8"))
+            configs = json.loads(safe_b64decode(zk_match.group(1)).decode("utf-8"))
             
             resolved_links = {}
             hls_indices = []

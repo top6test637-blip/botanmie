@@ -248,17 +248,26 @@ async def prompt_quality_selection(
             except Exception:
                 pass
             
-    from config import config
-    from aiogram.types import WebAppInfo
-    webapp_url = f"{config.WEBAPP_BASE_URL}/webapp/qualities?db_cache_id={db_cache_id}&anilist_id={anilist_id}&ep_number={ep_number}"
-    if message_id:
-        webapp_url += f"&message_id={message_id}"
+    keyboard_buttons = []
+    q_keys = list(qualities.keys())
+    import re
+    def get_q_res(k):
+        m = re.search(r'(\d+)', k)
+        return int(m.group(1)) if m else 0
+    q_keys.sort(key=get_q_res, reverse=True)
     
-    keyboard_buttons = [
-        [InlineKeyboardButton(text="⚙️ اختر الجودة", web_app=WebAppInfo(url=webapp_url))],
-        [InlineKeyboardButton(text="🔙 رجوع للحلقات", callback_data=f"nav_grid:{anilist_id}")]
-    ]
+    row = []
+    for q_name in q_keys:
+        row.append(InlineKeyboardButton(text=f"⚙️ {q_name}", callback_data=f"dl:{q_name}:{db_cache_id}"))
+        if len(row) == 2:
+            keyboard_buttons.append(row)
+            row = []
+    if row:
+        keyboard_buttons.append(row)
         
+    keyboard_buttons.append([
+        InlineKeyboardButton(text="🔙 رجوع للحلقات", callback_data=f"nav_grid:{anilist_id}")
+    ])
     markup = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     
     quality_text = (
@@ -322,12 +331,6 @@ async def handle_download_callback(callback: CallbackQuery, db_session: AsyncSes
         
     await callback.answer()
     
-    # Delete original menu message to avoid spamming the UI
-    try:
-        await callback.bot.delete_message(chat_id=callback.message.chat.id, message_id=callback.message.message_id)
-    except Exception:
-        pass
-        
     # Resolve anilist_id and anime_title/ep_num
     play_url = dl_cache.play_url
     anilist_id = None
@@ -371,21 +374,28 @@ async def handle_download_callback(callback: CallbackQuery, db_session: AsyncSes
         )
         return
 
-    # Create status message
-    status_msg = await callback.message.answer(
+    # Create status message in-place
+    status_text = (
         f"⏳ **تم إضافة طلبك لقائمة الانتظار:**\n"
         f"🎬 الأنمي: {anime_title}\n"
         f"🔢 الحلقة: {episode_num}\n"
         f"⚙️ الجودة: {requested_quality}\n\n"
         f"🔄 جاري بدء المعالجة والتحميل، يرجى الانتظار..."
     )
+    try:
+        await callback.message.edit_text(status_text, reply_markup=None, parse_mode="Markdown")
+    except TelegramBadRequest:
+        try:
+            await callback.message.edit_caption(caption=status_text, reply_markup=None, parse_mode="Markdown")
+        except Exception:
+            pass
 
     # Insert into PersistentTaskQueue
     from app.database.models import PersistentTaskQueue
     new_task = PersistentTaskQueue(
         user_id=callback.from_user.id,
         chat_id=callback.message.chat.id,
-        message_id=status_msg.message_id,
+        message_id=callback.message.message_id,
         anilist_id=anilist_id,
         anime_title=anime_title,
         episode_num=episode_num,

@@ -329,27 +329,98 @@ async def render_episode_keyboard(
     if title.startswith("WITANIME:"):
         title = cache_entry.title_english
         
-    from config import config
-    from aiogram.types import WebAppInfo
-    webapp_url = f"{config.WEBAPP_BASE_URL}/webapp/episodes?anilist_id={anilist_id}"
-    if message_id:
-        webapp_url += f"&message_id={message_id}"
+    # Get all episodes from the cache
+    stmt_eps = select(EpisodeCache).where(EpisodeCache.anilist_id == anilist_id)
+    res_eps = await db_session.execute(stmt_eps)
+    cached_episodes = res_eps.scalars().all()
     
-    inline_keyboard = [
-        [InlineKeyboardButton(text="📺 اختر الحلقة", web_app=WebAppInfo(url=webapp_url))],
-        [
-            InlineKeyboardButton(text="🔙 رجوع للبحث", callback_data=f"back_to_search:{anilist_id}"),
-            InlineKeyboardButton(text="⭐ إضافة للمفضلة", callback_data=f"fav_add:{anilist_id}")
-        ]
-    ]
+    # Sort them using parse_ep_num
+    cached_episodes.sort(key=lambda ep: parse_ep_num(ep.ep_number))
+    
+    inline_keyboard = []
+    total_eps = len(cached_episodes)
+    
+    if total_eps == 0:
+        inline_keyboard.append([InlineKeyboardButton(text="❌ لا توجد حلقات متوفرة", callback_data="none")])
+        text = (
+            f"**الأنمي المختار**: {title}\n"
+            f"القصة: {cache_entry.description[:250] + '...' if cache_entry.description else 'لا يوجد'}\n\n"
+            f"عذراً، لم يتم العثور على حلقات متوفرة حالياً لهذا الأنمي."
+        )
+    elif total_eps <= 24:
+        # Show all episodes directly in a grid (4 columns)
+        row = []
+        for ep in cached_episodes:
+            row.append(InlineKeyboardButton(text=f"📺 {ep.ep_number}", callback_data=f"sel_ep_click:{anilist_id}:{ep.ep_number}"))
+            if len(row) == 4:
+                inline_keyboard.append(row)
+                row = []
+        if row:
+            inline_keyboard.append(row)
+            
+        text = (
+            f"**الأنمي المختار**: {title}\n"
+            f"القصة: {cache_entry.description[:250] + '...' if cache_entry.description else 'لا يوجد'}\n\n"
+            f"اختر رقم الحلقة المطلوبة من الأزرار بالأسفل للتحميل والمشاهدة:"
+        )
+    else:
+        # More than 24 episodes: pagination block needed
+        block_size = 40
+        if start_ep is None or end_ep is None:
+            # Main blocks page
+            row = []
+            for start in range(1, total_eps + 1, block_size):
+                end = min(start + block_size - 1, total_eps)
+                row.append(InlineKeyboardButton(
+                    text=f"الحلقات {start} - {end}",
+                    callback_data=f"ep_block:{anilist_id}:{start}:{end}"
+                ))
+                if len(row) == 2:
+                    inline_keyboard.append(row)
+                    row = []
+            if row:
+                inline_keyboard.append(row)
+                
+            text = (
+                f"**الأنمي المختار**: {title}\n"
+                f"القصة: {cache_entry.description[:250] + '...' if cache_entry.description else 'لا يوجد'}\n\n"
+                f"الأنمي يحتوي على {total_eps} حلقة. يرجى اختيار فئة الحلقات المطلوبة:"
+            )
+        else:
+            # Inside a specific block of episodes
+            row = []
+            for ep in cached_episodes:
+                val = parse_ep_num(ep.ep_number)
+                if start_ep <= val <= end_ep:
+                    row.append(InlineKeyboardButton(
+                        text=f"📺 {ep.ep_number}",
+                        callback_data=f"sel_ep_click:{anilist_id}:{ep.ep_number}"
+                    ))
+                    if len(row) == 4:
+                        inline_keyboard.append(row)
+                        row = []
+            if row:
+                inline_keyboard.append(row)
+                
+            # Add a back button to the blocks selection
+            inline_keyboard.append([
+                InlineKeyboardButton(text="🔙 العودة لقائمة الفئات", callback_data=f"ep_blocks_home:{anilist_id}")
+            ])
+            
+            text = (
+                f"**الأنمي المختار**: {title}\n"
+                f"الحلقات من {start_ep} إلى {end_ep}:\n\n"
+                f"اختر الحلقة المطلوبة:"
+            )
+            
+    # Bottom actions for all menus
+    inline_keyboard.append([
+        InlineKeyboardButton(text="🔙 رجوع للبحث", callback_data=f"back_to_search:{anilist_id}"),
+        InlineKeyboardButton(text="⭐ إضافة للمفضلة", callback_data=f"fav_add:{anilist_id}")
+    ])
+    
     markup = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
     
-    text = (
-        f"**الأنمي المختار**: {title}\n"
-        f"القصة: {cache_entry.description[:250] + '...' if cache_entry.description else 'لا يوجد'}\n\n"
-        f"اضغط على الزر بالأسفل لفتح قائمة الحلقات واختيار الحلقة المطلوبة:"
-    )
-        
     if message_id:
         try:
             # Try editing as caption first (for photo messages)
