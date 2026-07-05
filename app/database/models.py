@@ -15,10 +15,26 @@ class SearchCache(Base):
     description = Column(Text, nullable=True)
     image_url = Column(String(1000), nullable=True)
     duration = Column(String(100), nullable=True)
+    synonyms = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         UniqueConstraint('query_text', 'anilist_id', name='_query_anilist_uc'),
+    )
+
+class TelegramFileCache(Base):
+    """Caches Telegram file_id for zero-second instant delivery across server crashes/restarts."""
+    __tablename__ = "telegram_file_cache"
+
+    id = Column(Integer, primary_key=True)
+    anilist_id = Column(BigInteger, nullable=False, index=True)
+    ep_number = Column(String(50), nullable=False, index=True)
+    quality = Column(String(50), nullable=False, index=True)
+    file_id = Column(String(500), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('anilist_id', 'ep_number', 'quality', name='_anilist_ep_quality_uc'),
     )
 
 class EpisodeCache(Base):

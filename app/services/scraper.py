@@ -37,8 +37,10 @@ def normalize_quality_name(name: str) -> str:
         return "720p"
     if "480" in name or "sd" in name:
         return "480p"
-    if "360" in name or "low" in name or "mobile" in name:
+    if "360" in name or "mobile" in name:
         return "360p"
+    if "240" in name or "low" in name:
+        return "240p"
     if not name.endswith("p") and name.isdigit():
         return f"{name}p"
     return name
@@ -767,7 +769,8 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
             for sel in [
                 "#episode-servers li", ".episode-servers li", "ul.servers-list li", ".servers-list li", 
                 "#watch-servers li", "li.server", "#episode-servers a", ".episode-servers a", 
-                "#watch-servers a", "ul.servers-list a", ".servers-list a"
+                "#watch-servers a", "ul.servers-list a", ".servers-list a",
+                ".server-list li", "#servers-list li", "div.watch-servers li", ".tab-content .server-item", "ul li[data-server]"
             ]:
                 found = soup.select(sel)
                 if found:
@@ -781,7 +784,8 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
             zk_match = re.search(r'var _zK="([^"]+)"', html)
             
             if not zx_match or not zk_match:
-                raise ScraperError("Failed to locate player registries (_zX / _zK) on watch page")
+                logger.warning("Failed to locate player registries (_zX / _zK) on watch page")
+                return {}
                 
             resources = json.loads(safe_b64decode(zx_match.group(1)).decode("utf-8"))
             configs = json.loads(safe_b64decode(zk_match.group(1)).decode("utf-8"))
@@ -794,7 +798,7 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
             for idx, (res, conf) in enumerate(zip(resources, configs)):
                 s_name = server_names[idx] if idx < len(server_names) else ""
                 # Prioritize active HLS streaming mirrors at the top of the queue
-                if any(x in s_name for x in ["streamwish", "yona", "yonaplay", "videa", "hglink"]):
+                if any(x in s_name for x in ["streamwish", "yona", "yonaplay", "videa", "hglink", "soraplay", "sorastream", "hanerix"]):
                     hls_indices.append(idx)
                 # Push direct file hosts to the absolute bottom of the queue
                 elif "mp4upload" in s_name or "yourupload" in s_name:
@@ -822,16 +826,13 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
                         else:
                             # Direct MP4 file link resolved from mirror!
                             q_name = normalize_quality_name(s_name) if s_name else "480p"
-                            if q_name not in ["1080p", "720p", "480p", "360p"]:
+                            if q_name not in ["1080p", "720p", "480p", "360p", "240p"]:
                                 q_name = "480p"
                             resolved_links[q_name] = m3u8_master
-                        
-                        # If we resolved at least high res and mobile qualities, we can stop to save time
-                        if all(q in resolved_links for q in ["1080p", "720p", "480p", "360p"]):
-                            break
                             
             if not resolved_links:
-                raise ScraperError("Failed to parse any working HLS streams or direct video files from embed servers")
+                logger.warning("Failed to parse working HLS streams or direct video files from embed servers")
+                return {}
                 
             logger.info(f"Resolved {len(resolved_links)} download link qualities: {list(resolved_links.keys())}")
             return resolved_links

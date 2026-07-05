@@ -216,7 +216,7 @@ async def webapp_qualities(db_cache_id: int, anilist_id: int, ep_number: str):
         buttons_html = ""
         if "auto" in qualities or not qualities:
             buttons_html += '<button class="btn btn-auto" onclick="selectQuality(\'auto\')">تلقائي (حجم ذكي &lt;= 2 جيجا)</button>\n'
-        for q in ["1080p", "720p", "480p", "360p"]:
+        for q in ["1080p", "720p", "480p", "360p", "240p"]:
             if q in qualities:
                 btn_class = f"btn-{q}"
                 buttons_html += f'<button class="btn {btn_class}" onclick="selectQuality(\'{q}\')">{q}</button>\n'

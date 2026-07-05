@@ -62,6 +62,9 @@
         .btn-360p {
             background-color: #6c757d; /* Solid Gray */
         }
+        .btn-240p {
+            background-color: #fd7e14; /* Solid Orange */
+        }
         .loader {
             display: none;
             margin-top: 20px;
@@ -96,6 +99,9 @@
         {% endif %}
         {% if "360p" in qualities %}
         <button class="btn btn-360p" onclick="selectQuality('360p')">360p</button>
+        {% endif %}
+        {% if "240p" in qualities %}
+        <button class="btn btn-240p" onclick="selectQuality('240p')">240p</button>
         {% endif %}
     </div>
 

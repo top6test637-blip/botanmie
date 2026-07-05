@@ -102,7 +102,8 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
                     title_romaji=anime["title_romaji"],
                     description=anime["description"],
                     image_url=anime["image_url"],
-                    duration=anime.get("duration")[:90] if anime.get("duration") else None
+                    duration=anime.get("duration")[:90] if anime.get("duration") else None,
+                    synonyms=anime.get("synonyms")
                 )
                 db_session.add(new_cache)
             await db_session.commit()
@@ -201,9 +202,18 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
                 if cleaned_eng != cleaned_title:
                     matched_query = cleaned_eng
                     scraper_results = await search_anime_scraper(cleaned_eng)
+
+            # Fallback to synonyms from AniList if primary titles returned 0 results
+            if not scraper_results and cache_entry.synonyms:
+                for syn in cache_entry.synonyms:
+                    cleaned_syn = sanitize_search_query(syn)
+                    if cleaned_syn and cleaned_syn != cleaned_title:
+                        logger.info(f"محاولة البحث بالمرادف المصاحب (Synonym): '{cleaned_syn}'")
+                        scraper_results = await search_anime_scraper(cleaned_syn)
+                        if scraper_results:
+                            matched_query = cleaned_syn
+                            break
                     
-            # Single-Attempt: If both romaji and English title return 0 results, stop.
-            # No word-stripping fallback loops — they waste tokens and return inaccurate results.
             if not scraper_results:
                 try:
                     await callback.message.edit_text("❌ لم يتم العثور على هذا الأنمي في خوادم البث المساعدة.")
@@ -214,7 +224,7 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
                         pass
                 return
                 
-            anime_slug = get_best_slug_match(scraper_results, cleaned_title)
+            anime_slug = get_best_slug_match(scraper_results, matched_query)
 
     scraped_data = None
     if anime_slug:

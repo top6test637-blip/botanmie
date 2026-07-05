@@ -33,7 +33,7 @@ class AdaptiveSemaphore:
 
     async def adjust_limit(self, new_limit: int):
         async with self.cond:
-            self.limit = max(2, min(20, new_limit))
+            self.limit = max(2, min(64, new_limit))
             self.cond.notify_all()
 
 
@@ -149,7 +149,7 @@ async def select_best_quality(qualities: Dict[str, str], requested_quality: str 
     Smart Size Logic:
     Resolves the best quality that is <= 2GB.
     """
-    quality_order = ["1080p", "720p", "480p", "360p"]
+    quality_order = ["1080p", "720p", "480p", "360p", "240p"]
     available_qualities = [q for q in quality_order if q in qualities]
     
     if requested_quality != "auto" and requested_quality in qualities:
@@ -284,8 +284,8 @@ async def download_hls(
             actual_seg_size = first_seg_size - 252 if is_png_wrapped else first_seg_size
             estimated_total_size = total_segments * actual_seg_size
             
-            # Spawn parallel download tasks with progress tracking
-            semaphore = asyncio.Semaphore(15)
+            # Spawn parallel download tasks with progress tracking (uncapped 32 worker pool)
+            semaphore = asyncio.Semaphore(32)
             completed_segments = 0
             
             async def download_segment_with_progress(idx, seg_url, is_png_wrapped, sem):
@@ -510,7 +510,7 @@ async def download_file(
     # Use multipart parallel downloader for direct files to bypass speed caps
     if total_size > 5 * 1024 * 1024:
         logger.info(f"Using multipart downloader for direct URL: {url}")
-        num_parts = 32 if ("mp4upload" in url or "yourupload" in url) else 48
+        num_parts = 48 if ("mp4upload" in url or "yourupload" in url) else 64
         success = await download_multipart(url, target_path, status_message, total_size, quality, num_parts=num_parts)
         if success:
             return True

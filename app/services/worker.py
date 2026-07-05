@@ -51,6 +51,60 @@ async def get_thumbnail_input(bot: Bot) -> Optional[FSInputFile]:
         
     return None
 
+async def get_video_thumbnail(bot: Bot, db_session_factory, anilist_id: int) -> Optional[FSInputFile]:
+    """Retrieves AniList poster image as video cover art, falling back to custom admin thumbnail."""
+    try:
+        from app.database.models import SearchCache
+        async with db_session_factory() as session:
+            stmt = select(SearchCache).where(SearchCache.anilist_id == anilist_id)
+            res = await session.execute(stmt)
+            cache_entry = res.scalars().first()
+            if cache_entry and cache_entry.image_url:
+                poster_url = cache_entry.image_url
+                poster_path = config.DOWNLOAD_DIR / f"poster_{anilist_id}.jpg"
+                if poster_path.exists() and (time.time() - poster_path.stat().st_mtime < 86400):
+                    return FSInputFile(str(poster_path))
+                
+                import aiohttp
+                async with aiohttp.ClientSession() as s:
+                    async with s.get(poster_url, timeout=10) as resp:
+                        if resp.status == 200:
+                            data = await resp.read()
+                            with open(poster_path, "wb") as f:
+                                f.write(data)
+                            return FSInputFile(str(poster_path))
+    except Exception as e:
+        logger.warning(f"Failed to fetch AniList cover image thumbnail: {e}")
+        
+    return await get_thumbnail_input(bot)
+
+async def save_telegram_file_cache(db_session_factory, anilist_id: int, ep_number: str, quality: str, file_id: str):
+    """Persists Telegram file_id to TelegramFileCache table for zero-second instant delivery after restarts."""
+    try:
+        from app.database.models import TelegramFileCache
+        async with db_session_factory() as session:
+            stmt = select(TelegramFileCache).where(
+                (TelegramFileCache.anilist_id == anilist_id) &
+                (TelegramFileCache.ep_number == ep_number) &
+                (TelegramFileCache.quality == quality)
+            )
+            res = await session.execute(stmt)
+            existing = res.scalar_one_or_none()
+            if existing:
+                existing.file_id = file_id
+            else:
+                new_entry = TelegramFileCache(
+                    anilist_id=anilist_id,
+                    ep_number=ep_number,
+                    quality=quality,
+                    file_id=file_id
+                )
+                session.add(new_entry)
+            await session.commit()
+            logger.info(f"Saved TelegramFileCache entry for anilist_id={anilist_id}, ep={ep_number}, quality={quality}")
+    except Exception as e:
+        logger.exception(f"Error saving to TelegramFileCache: {e}")
+
 async def recover_stuck_tasks(db_session_factory):
     """Resets any 'processing' tasks back to 'pending' on startup."""
     try:
@@ -239,6 +293,80 @@ async def execute_queued_task(
     """Executes HLS segment downloading, compression, delivery, and forum mirroring."""
     logger.info(f"Executing task {task_id}: {anime_title} ep {episode_num} [{requested_quality}]")
     
+    # 0. Check TelegramFileCache for instant Zero-second delivery across server crashes/restarts
+    try:
+        from app.database.models import TelegramFileCache
+        async with db_session_factory() as session:
+            stmt_tf = select(TelegramFileCache).where(
+                (TelegramFileCache.anilist_id == anilist_id) &
+                (TelegramFileCache.ep_number == episode_num)
+            )
+            if requested_quality != "auto":
+                stmt_tf = stmt_tf.where(TelegramFileCache.quality == requested_quality)
+            res_tf = await session.execute(stmt_tf)
+            tf_entry = res_tf.scalars().first()
+            
+        if tf_entry and tf_entry.file_id:
+            logger.info(f"Zero-second Delivery (DB File ID hit): {tf_entry.file_id[:15]}... for {anime_title} Ep {episode_num} [{tf_entry.quality}]")
+            if status_msg_id:
+                try: await bot.delete_message(chat_id=chat_id, message_id=status_msg_id)
+                except Exception: pass
+                
+            # Render navigation keyboard
+            prev_ep, next_ep = None, None
+            async with db_session_factory() as session:
+                stmt_all = select(EpisodeCache).where(EpisodeCache.anilist_id == anilist_id)
+                res_all = await session.execute(stmt_all)
+                all_eps = res_all.scalars().all()
+                def parse_ep(e):
+                    try: return float(e.ep_number)
+                    except ValueError: return 999999.0
+                all_eps.sort(key=parse_ep)
+                idx = -1
+                for i, ep in enumerate(all_eps):
+                    if ep.ep_number == episode_num:
+                        idx = i
+                        break
+                if idx > 0: prev_ep = all_eps[idx - 1].ep_number
+                if idx >= 0 and idx < len(all_eps) - 1: next_ep = all_eps[idx + 1].ep_number
+                
+            nav_row = []
+            if prev_ep: nav_row.append(InlineKeyboardButton(text="◀️ السابقة", callback_data=f"nav_ep:{anilist_id}:{prev_ep}"))
+            nav_row.append(InlineKeyboardButton(text="🔢 الحلقات", callback_data=f"nav_grid:{anilist_id}"))
+            if next_ep: nav_row.append(InlineKeyboardButton(text="التالية ▶️", callback_data=f"nav_ep:{anilist_id}:{next_ep}"))
+            nav_markup = InlineKeyboardMarkup(inline_keyboard=[nav_row])
+            
+            bot_info = await bot.get_me()
+            chan = config.CHANNEL_USERNAME if config.CHANNEL_USERNAME else (f"@{bot_info.username}" if bot_info else "")
+            if chan and not chan.startswith("@"): chan = "@" + chan
+            
+            caption = (
+                f"🎬 **{anime_title}**\n"
+                f"🔢 **الحلقة:** {episode_num}\n"
+                f"⚙️ **الجودة:** {tf_entry.quality}\n"
+                f"💾 **الحجم:** محمل مسبقاً ⚡\n\n"
+                f"🎥 **مشاهدة ممتعة!** ✨🍿\n"
+                f"📢 **القناة:** {chan}"
+            )
+            thumb_input = await get_video_thumbnail(bot, db_session_factory, anilist_id)
+            
+            try:
+                await bot.send_video(
+                    chat_id=chat_id,
+                    video=tf_entry.file_id,
+                    thumbnail=thumb_input,
+                    caption=caption,
+                    supports_streaming=True,
+                    reply_markup=nav_markup,
+                    parse_mode="Markdown"
+                )
+                await mirror_video_to_library(bot, db_session_factory, anilist_id, anime_title, episode_num, tf_entry.quality, tf_entry.file_id)
+                return True
+            except Exception as cached_deliv_err:
+                logger.warning(f"Failed instant delivery of file_id {tf_entry.file_id}: {cached_deliv_err}. Falling back to full scraper pipeline.")
+    except Exception:
+        logger.exception("Error checking TelegramFileCache")
+
     # 1. Resolve play_url from EpisodeCache
     async with db_session_factory() as session:
         stmt = select(EpisodeCache).where(
@@ -353,7 +481,7 @@ async def execute_queued_task(
             try: await bot.delete_message(chat_id=chat_id, message_id=status_msg_id)
             except Exception: pass
         
-        thumb_input = await get_thumbnail_input(bot)
+        thumb_input = await get_video_thumbnail(bot, db_session_factory, anilist_id)
         
         await bot.send_video(
             chat_id=chat_id,
@@ -365,6 +493,7 @@ async def execute_queued_task(
             reply_markup=nav_markup,
             parse_mode="Markdown"
         )
+        await save_telegram_file_cache(db_session_factory, anilist_id, episode_num, selected_quality, download_url)
         return True
 
     # 4. Download media file
@@ -483,7 +612,7 @@ async def execute_queued_task(
             except Exception: pass
 
         video_file = FSInputFile(str(temp_file_path))
-        thumb_input = await get_thumbnail_input(bot)
+        thumb_input = await get_video_thumbnail(bot, db_session_factory, anilist_id)
 
         sent_msg = await bot.send_video(
             chat_id=chat_id,
@@ -505,7 +634,9 @@ async def execute_queued_task(
         # 7. Mirror to Library Group
         await mirror_video_to_library(bot, db_session_factory, anilist_id, anime_title, episode_num, selected_quality, uploaded_file_id)
 
-        # 8. Cache uploaded Telegram file ID globally
+        # 8. Cache uploaded Telegram file ID globally and strictly in TelegramFileCache DB
+        await save_telegram_file_cache(db_session_factory, anilist_id, episode_num, selected_quality, uploaded_file_id)
+
         async with db_session_factory() as session:
             stmt_update = select(DownloadCache).where(DownloadCache.play_url == play_url)
             res_update = await session.execute(stmt_update)

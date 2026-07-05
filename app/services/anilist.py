@@ -55,6 +55,7 @@ query ($search: String) {
         romaji
         english
       }
+      synonyms
       description
       coverImage {
         extraLarge
@@ -82,6 +83,7 @@ query ($search: String) {
             romaji
             english
           }
+          synonyms
           description
           coverImage {
             extraLarge
@@ -212,6 +214,11 @@ async def parse_media_node(media: Dict[str, Any]) -> Dict[str, Any]:
     raw_duration = media.get("duration")
     duration = f"{raw_duration} دقيقة" if raw_duration else None
     
+    # Extract synonyms (alternative titles) for fallback search
+    synonyms = media.get("synonyms", []) or []
+    # Filter out empty strings and duplicates
+    synonyms = [s.strip() for s in synonyms if s and s.strip()]
+
     return {
         "anilist_id": media.get("id"),
         "title_english": title_english,
@@ -220,4 +227,5 @@ async def parse_media_node(media: Dict[str, Any]) -> Dict[str, Any]:
         "image_url": image_url,
         "duration": duration,
         "episodes_count": media.get("episodes"),
+        "synonyms": synonyms,
     }
