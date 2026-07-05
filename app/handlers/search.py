@@ -367,6 +367,19 @@ async def render_episode_keyboard(
     title = cache_entry.title_english or cache_entry.title_romaji
     if title.startswith("WITANIME:"):
         title = cache_entry.title_english
+
+    # On-demand translate description to Arabic if it is in English/foreign language
+    desc = cache_entry.description or ""
+    if desc and desc != "لا يوجد" and not any(ord(c) >= 0x0600 and ord(c) <= 0x06FF for c in desc):
+        try:
+            from app.services.anilist import translate_to_arabic
+            translated = await translate_to_arabic(desc)
+            if translated:
+                cache_entry.description = translated
+                db_session.add(cache_entry)
+                await db_session.commit()
+        except Exception as e:
+            logger.warning(f"Failed to translate description on-demand: {e}")
         
     # Get all episodes from the cache
     stmt_eps = select(EpisodeCache).where(EpisodeCache.anilist_id == anilist_id)

@@ -209,12 +209,6 @@ async def parse_media_node(media: dict[str, Any]) -> dict[str, Any]:
         description = re.sub(r'<[^>]*>', '', description)
         description = html.unescape(description)
         
-        # Force translate English description to Arabic
-        if not any(ord(c) >= 0x0600 and ord(c) <= 0x06FF for c in description):
-            translated = await translate_to_arabic(description)
-            if translated:
-                description = translated
-        
     cover_image = media.get("coverImage", {})
     image_url = cover_image.get("extraLarge") or cover_image.get("large")
     
