@@ -419,24 +419,122 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
     if "videa.hu" in embed_url or "videa" in embed_url:
         try:
             logger.info(f"Resolving videa.hu embed: {embed_url}")
+            
+            # Extract video ID
+            video_id_match = re.search(r'v=([a-zA-Z0-9]+)', embed_url)
+            if not video_id_match:
+                logger.warning("Failed to parse videa video ID")
+                return None
+            video_id = video_id_match.group(1)
+            
             headers = get_browser_headers(embed_url)
             async with session.get(embed_url, headers=headers, ssl=False, timeout=10) as response:
-                if response.status == 200:
-                    text = await response.text()
-                    text = text.replace("\\/", "/")
-                    mp4_match = re.search(r'(?:"file"|src)\s*:\s*["\'](https?://[^"\']+\.mp4[^"\']*)["\']', text, re.IGNORECASE)
-                    if not mp4_match:
-                        mp4_match = re.search(r'(?:"file"|src)\s*:\s*["\'](https?://[^"\']+)["\']', text, re.IGNORECASE)
-                    if not mp4_match:
-                        mp4_match = re.search(r'<source\s+[^>]*src=["\'](https?://[^"\']+)["\']', text, re.IGNORECASE)
-                    if mp4_match:
-                        mp4_url = mp4_match.group(1)
-                        import html as html_lib
-                        mp4_url = html_lib.unescape(mp4_url)
-                        logger.info(f"Resolved videa.hu direct stream: {mp4_url}")
-                        return mp4_url
+                if response.status != 200:
+                    logger.warning(f"Failed to fetch Videa embed page: {response.status}")
+                    return None
+                html = await response.text()
+                
+            # Find _xt
+            xt_match = re.search(r'_xt\s*=\s*"([^"]+)"', html)
+            if not xt_match:
+                logger.warning("Failed to find _xt nonce in Videa html")
+                return None
+            nonce = xt_match.group(1)
+            
+            _STATIC_SECRET = 'xHb0ZvME5q8CBcoQi6AngerDu3FGO9fkUlwPmLVY_RTzj2hJIS4NasXWKy1td7p'
+            l = nonce[:32]
+            s = nonce[32:]
+            result = ''
+            for i in range(32):
+                idx = l[i]
+                sec_idx = _STATIC_SECRET.index(idx)
+                shift = sec_idx - 31
+                char_idx = i - shift
+                result += s[char_idx]
+                
+            import random
+            import string
+            random_seed = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
+            t_param = result[:16]
+            
+            xml_url = f"https://videa.hu/player/xml?v={video_id}&_s={random_seed}&_t={t_param}"
+            xml_headers = {
+                "User-Agent": headers.get("User-Agent", get_random_user_agent()),
+                "Referer": embed_url
+            }
+            
+            async with session.get(xml_url, headers=xml_headers, ssl=False, timeout=10) as xml_resp:
+                if xml_resp.status != 200:
+                    logger.warning(f"Failed to fetch Videa XML: {xml_resp.status}")
+                    return None
+                body = await xml_resp.read()
+                x_videa_xs = xml_resp.headers.get("x-videa-xs")
+                
+            if body.startswith(b'<?xml'):
+                xml_text = body.decode('utf-8')
+            else:
+                if not x_videa_xs:
+                    logger.warning("Missing x-videa-xs header for Videa decryption")
+                    return None
+                
+                # RC4 decryption
+                key = result[16:] + random_seed + x_videa_xs
+                import struct
+                res_bytes = b''
+                key_len = len(key)
+                S = list(range(256))
+                j = 0
+                for i in range(256):
+                    j = (j + S[i] + ord(key[i % key_len])) % 256
+                    S[i], S[j] = S[j], S[i]
+                i = 0
+                j = 0
+                cipher_text = base64.b64decode(body)
+                for m in range(len(cipher_text)):
+                    i = (i + 1) % 256
+                    j = (j + S[i]) % 256
+                    S[i], S[j] = S[j], S[i]
+                    k = S[(S[i] + S[j]) % 256]
+                    res_bytes += struct.pack('B', k ^ cipher_text[m])
+                try:
+                    xml_text = res_bytes.decode('utf-8')
+                except Exception:
+                    xml_text = res_bytes.decode('latin-1')
+                    
+            import xml.etree.ElementTree as ET
+            root = ET.fromstring(xml_text)
+            video_sources = root.find('./video_sources')
+            hash_values = root.find('./hash_values')
+            
+            videa_sources = {}
+            if video_sources is not None:
+                for source in video_sources.findall('./video_source'):
+                    name = source.get('name')
+                    exp = source.get('exp')
+                    url = source.text
+                    if not url:
+                        continue
+                    if not url.startswith("http"):
+                        url = f"https:{url}"
+                        
+                    hash_value = None
+                    if hash_values is not None:
+                        hash_el = hash_values.find(f'hash_value_{name}')
+                        if hash_el is not None:
+                            hash_value = hash_el.text
+                            
+                    if hash_value and exp:
+                        url = f"{url}?md5={hash_value}&expires={exp}"
+                        
+                    q_name = normalize_quality_name(name)
+                    videa_sources[q_name] = url
+                    
+            if videa_sources:
+                logger.info(f"Resolved videa.hu qualities: {list(videa_sources.keys())}")
+                return json.dumps(videa_sources)
+                
         except Exception as e:
-            logger.warning(f"Failed to resolve videa.hu: {e}")
+            logger.exception(f"Failed to decrypt/resolve Videa: {e}")
         return None
 
     # ok.ru embed: parse the embedded JSON metadata for direct video URLs or hlsManifestUrl
@@ -689,7 +787,13 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
                 if embed_url:
                     m3u8_master = await get_m3u8_from_embed(embed_url, session, referer=play_url)
                     if m3u8_master:
-                        if ".m3u8" in m3u8_master:
+                        if m3u8_master.startswith("{"):
+                            try:
+                                qualities = json.loads(m3u8_master)
+                                resolved_links.update(qualities)
+                            except Exception:
+                                pass
+                        elif ".m3u8" in m3u8_master:
                             qualities = await parse_m3u8_qualities(m3u8_master, session)
                             resolved_links.update(qualities)
                         else:
