@@ -533,25 +533,30 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
         "duration": duration
     }
 
+async def fetch_url_content(url: str, session: Any, referer: Optional[str] = None) -> str:
+    """Universal helper to fetch HTML/text content from any URL using browser headers & TLS impersonation."""
+    headers = get_browser_headers(url, referer=referer)
+    try:
+        if hasattr(session, 'get') and hasattr(session, 'impersonate'):
+            resp = await session.get(url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                return resp.text
+        else:
+            async with session.get(url, headers=headers, allow_redirects=True, ssl=False, timeout=10) as resp:
+                if resp.status == 200:
+                    return await resp.text()
+    except Exception as e:
+        logger.warning(f"Error fetching URL content for {url}: {e}")
+    return ""
+
 async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, referer: Optional[str] = None) -> Optional[str]:
     """Resolves and extracts .m3u8 master playlist or direct video file using custom player unpacker."""
     # mp4upload embed: parse video.src or Dean Edwards packed JS
     if "mp4upload.com" in embed_url or "mp4upload" in embed_url:
         try:
             logger.info(f"Resolving mp4upload embed: {embed_url}")
-            headers = get_browser_headers(embed_url)
-            html = ""
-            if hasattr(session, 'get') and hasattr(session, 'impersonate'):
-                resp = await session.get(embed_url, headers=headers, timeout=10)
-                if resp.status_code == 200:
-                    html = resp.text
-            else:
-                async with session.get(embed_url, headers=headers, allow_redirects=True, ssl=False, timeout=10) as resp:
-                    if resp.status == 200:
-                        html = await resp.text()
-
+            html = await fetch_url_content(embed_url, session, referer=referer)
             if html:
-                # 1. Unpack Dean Edwards JS if present
                 script_match = re.search(r"eval\(function\(p,a,c,k,e,d\).*?\.split\(['\"]\|['\"]\)\)\)", html, re.DOTALL)
                 if script_match:
                     unpacked = unpack_dean_edwards(script_match.group(0))
@@ -560,7 +565,6 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
                         logger.info(f"Resolved mp4upload direct video from unpacked JS: {mp4_matches[0]}")
                         return mp4_matches[0]
                 
-                # 2. Search player.src({type: "video/mp4", src: "..."})
                 src_match = re.search(r'player\.src\(\s*\{\s*type\s*:\s*["\']video/mp4["\']\s*,\s*src\s*:\s*["\'](https?://[^"\']+)["\']', html)
                 if not src_match:
                     src_match = re.search(r'src\s*:\s*["\'](https?://[^"\']+\.mp4[^"\']*)["\']', html)
@@ -574,17 +578,7 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
     if "mail.ru" in embed_url or "my.mail.ru" in embed_url:
         try:
             logger.info(f"Resolving my.mail.ru embed: {embed_url}")
-            headers = get_browser_headers(embed_url)
-            html = ""
-            if hasattr(session, 'get') and hasattr(session, 'impersonate'):
-                resp = await session.get(embed_url, headers=headers, timeout=10)
-                if resp.status_code == 200:
-                    text_data = resp.text
-            else:
-                async with session.get(embed_url, headers=headers, allow_redirects=True, ssl=False, timeout=10) as resp:
-                    if resp.status == 200:
-                        text_data = await resp.text()
-
+            text_data = await fetch_url_content(embed_url, session, referer=referer)
             if text_data:
                 v_match = re.search(r'"videoSrc"\s*:\s*"([^"]+)"', text_data)
                 if not v_match:
@@ -602,23 +596,19 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
     if "videa.hu" in embed_url or "videa" in embed_url:
         try:
             logger.info(f"Resolving videa.hu embed: {embed_url}")
-            headers = get_browser_headers(embed_url)
-            html = ""
-            async with session.get(embed_url, headers=headers, ssl=False, timeout=10) as response:
-                if response.status == 200:
-                    html = await response.text()
-                    # Check for direct static mp4 or HLS manifest in Videa HTML first
-                    static_mp4s = re.findall(r'https?://static\.videa\.hu/[^"\']+\.mp4[^"\']*', html)
-                    if not static_mp4s:
-                        static_mp4s = re.findall(r'src=["\'](https?://[^"\']*videa[^"\']*\.mp4[^"\']*)["\']', html)
-                    if static_mp4s:
-                        logger.info(f"Resolved static videa.hu MP4 file: {static_mp4s[0]}")
-                        return static_mp4s[0]
-                        
-                    hls_videa = re.findall(r'https?://[^"\']+\.m3u8[^"\']*', html)
-                    if hls_videa:
-                        logger.info(f"Resolved videa.hu HLS manifest: {hls_videa[0]}")
-                        return hls_videa[0]
+            html = await fetch_url_content(embed_url, session, referer=referer)
+            if html:
+                static_mp4s = re.findall(r'https?://static\.videa\.hu/[^"\']+\.mp4[^"\']*', html)
+                if not static_mp4s:
+                    static_mp4s = re.findall(r'src=["\'](https?://[^"\']*videa[^"\']*\.mp4[^"\']*)["\']', html)
+                if static_mp4s:
+                    logger.info(f"Resolved static videa.hu MP4 file: {static_mp4s[0]}")
+                    return static_mp4s[0]
+                    
+                hls_videa = re.findall(r'https?://[^"\']+\.m3u8[^"\']*', html)
+                if hls_videa:
+                    logger.info(f"Resolved videa.hu HLS manifest: {hls_videa[0]}")
+                    return hls_videa[0]
 
             # Extract video ID for XML decryption
             video_id_match = re.search(r'v=([a-zA-Z0-9]+)', embed_url)
@@ -804,64 +794,66 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
     if "yonaplay.net" in embed_url or "yonaplay" in embed_url:
         try:
             ref = referer or f"https://{WITANIME_DOMAIN}/"
-            headers = {"User-Agent": get_random_user_agent(), "Referer": ref}
             logger.info(f"Resolving yonaplay aggregator from: {embed_url} with referer: {ref}")
-            
-            async with session.get(embed_url, headers=headers, ssl=False, timeout=10) as resp:
-                if resp.status == 200:
-                    html = await resp.text()
+            html = await fetch_url_content(embed_url, session, referer=ref)
+            if html:
+                # 1. Check for iframe embedded players in yonaplay HTML
+                iframe_matches = re.findall(r'<iframe[^>]+src=["\']([^"\']+)["\']', html, re.IGNORECASE)
+                for iframe_url in iframe_matches:
+                    if not iframe_url.startswith("http"):
+                        iframe_url = urljoin(embed_url, iframe_url)
+                    logger.info(f"Found yonaplay embedded iframe: {iframe_url}")
+                    res_m3u8 = await get_m3u8_from_embed(iframe_url, session, referer=embed_url)
+                    if res_m3u8:
+                        return res_m3u8
 
-                    # 1. Check for iframe embedded players in yonaplay HTML
-                    iframe_matches = re.findall(r'<iframe[^>]+src=["\']([^"\']+)["\']', html, re.IGNORECASE)
-                    for iframe_url in iframe_matches:
-                        if not iframe_url.startswith("http"):
-                            iframe_url = urljoin(embed_url, iframe_url)
-                        logger.info(f"Found yonaplay embedded iframe: {iframe_url}")
-                        res_m3u8 = await get_m3u8_from_embed(iframe_url, session, referer=embed_url)
-                        if res_m3u8:
-                            return res_m3u8
+                # 2. Check for direct .m3u8 or .mp4 file links or sources array in script tags
+                m3u8_direct = re.search(r'(?:file|src|url)\s*:\s*["\'](https?://[^"\']+\.(?:m3u8|mp4)[^"\']*)["\']', html, re.IGNORECASE)
+                if not m3u8_direct:
+                    m3u8_direct = re.search(r'["\'](https?://[^"\']+\.(?:m3u8|mp4)[^"\']*)["\']', html)
+                if m3u8_direct and m3u8_direct.group(1).startswith("http"):
+                    logger.info(f"Resolved direct video/m3u8 from yonaplay: {m3u8_direct.group(1)}")
+                    return m3u8_direct.group(1)
 
-                    # 2. Check for direct .m3u8 or .mp4 file links in script tags
-                    m3u8_direct = re.search(r'file\s*:\s*["\'](https?://[^"\']+\.m3u8[^"\']*)["\']', html)
-                    if not m3u8_direct:
-                        m3u8_direct = re.search(r'["\'](https?://[^"\']+\.m3u8[^"\']*)["\']', html)
-                    if m3u8_direct and m3u8_direct.group(1).startswith("http"):
-                        logger.info(f"Resolved direct m3u8 from yonaplay: {m3u8_direct.group(1)}")
-                        return m3u8_direct.group(1)
+                # 3. Unpack Dean Edwards JS if present in yonaplay
+                script_match = re.search(r"eval\(function\(p,a,c,k,e,d\).*?\.split\(['\"]\|['\"]\)\)\)", html, re.DOTALL)
+                if script_match:
+                    unpacked = unpack_dean_edwards(script_match.group(0))
+                    v_matches = re.findall(r'https?://[^\s"\']+\.(?:m3u8|mp4)[^\s"\']*', unpacked)
+                    if v_matches:
+                        logger.info(f"Resolved video from yonaplay unpacked JS: {v_matches[0]}")
+                        return v_matches[0]
 
-                    # 3. Find all go_to_player('...') Base64 strings
-                    b64_matches = re.findall(r"go_to_player\(['\"]([a-zA-Z0-9+/=]+)['\"]\)", html)
-                    logger.info(f"yonaplay found {len(b64_matches)} player options")
-                    
-                    for b64_str in b64_matches:
-                        try:
-                            decoded_url = safe_b64decode(b64_str).decode("utf-8")
-                            logger.info(f"Decoded yonaplay player option: {decoded_url}")
-                            
-                            if "dotplay.net" in decoded_url:
-                                match_code = re.search(r"/embed/([a-zA-Z0-9]+)", decoded_url)
-                                if match_code:
-                                    code = match_code.group(1)
-                                    api_url = f"https://dotplay.net/api.php?code={code}"
-                                    api_headers = {
-                                        "User-Agent": get_random_user_agent(),
-                                        "Referer": decoded_url,
-                                        "Accept": "application/json"
-                                    }
-                                    logger.info(f"Calling dotplay API: {api_url}")
-                                    async with session.get(api_url, headers=api_headers, ssl=False, timeout=10) as api_resp:
-                                        if api_resp.status == 200:
-                                            data = await api_resp.json()
-                                            if data.get("success") and data.get("video_url"):
-                                                dec_url = safe_b64decode(data["video_url"]).decode("utf-8").split("|")[0]
-                                                logger.info(f"Resolved video URL from dotplay: {dec_url}")
-                                                return dec_url
-                            elif "http" in decoded_url:
-                                res_m3u8 = await get_m3u8_from_embed(decoded_url, session, referer=embed_url)
-                                if res_m3u8:
-                                    return res_m3u8
-                        except Exception as e:
-                            logger.warning(f"Failed to resolve yonaplay option {b64_str}: {e}")
+                # 4. Find all go_to_player('...') Base64 strings
+                b64_matches = re.findall(r"go_to_player\(['\"]([a-zA-Z0-9+/=]+)['\"]\)", html)
+                if not b64_matches:
+                    b64_matches = re.findall(r"['\"]([a-zA-Z0-9+/=]{20,})['\"]", html)
+                logger.info(f"yonaplay found {len(b64_matches)} player options")
+                
+                for b64_str in b64_matches:
+                    try:
+                        decoded_url = safe_b64decode(b64_str).decode("utf-8")
+                        if "dotplay.net" in decoded_url:
+                            match_code = re.search(r"/embed/([a-zA-Z0-9]+)", decoded_url)
+                            if match_code:
+                                code = match_code.group(1)
+                                api_url = f"https://dotplay.net/api.php?code={code}"
+                                api_json = await fetch_url_content(api_url, session, referer=decoded_url)
+                                if api_json:
+                                    try:
+                                        data = json.loads(api_json)
+                                        if data.get("success") and data.get("video_url"):
+                                            dec_url = safe_b64decode(data["video_url"]).decode("utf-8").split("|")[0]
+                                            logger.info(f"Resolved video URL from dotplay: {dec_url}")
+                                            return dec_url
+                                    except Exception:
+                                        pass
+                        elif decoded_url.startswith("http"):
+                            res_m3u8 = await get_m3u8_from_embed(decoded_url, session, referer=embed_url)
+                            if res_m3u8:
+                                return res_m3u8
+                    except Exception as e:
+                        logger.warning(f"Failed to resolve yonaplay option {b64_str}: {e}")
         except Exception as e:
             logger.exception(f"Error resolving yonaplay: {e}")
         return None
@@ -1054,21 +1046,26 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
                             
             if not resolved_links:
                 logger.info("HLS/Embed parsing yielded 0 links. Scraping fallback download table buttons on watch page...")
-                download_btns = soup.select(".download-links a, table.download-table a, a.download-link, .download-item a, .download-list a")
+                download_btns = soup.select(".download-links a, table.download-table a, a.download-link, .download-item a, .download-list a, .dlinks a, .quality-download a, .quality-box a")
                 if not download_btns:
-                    download_btns = soup.find_all("a", href=lambda h: h and ("download" in str(h).lower() or "mp4upload" in str(h).lower() or "upload" in str(h).lower()))
+                    download_btns = soup.find_all("a", href=lambda h: h and any(x in str(h).lower() for x in ["go.witanime", "/go/", "download", "mp4upload", "mega", "drive", "4shared", "gofile", "videa", "ok.ru"]))
+                if not download_btns:
+                    download_btns = soup.find_all("a", href=True)
                     
                 for a in download_btns:
                     href = a.get("href")
                     if href and href.startswith("http"):
-                        label = a.text.strip().lower()
+                        label = (a.text.strip() + " " + str(a.get("class", "")) + " " + href).lower()
+                        if not any(x in href.lower() for x in ["go.witanime", "/go/", "download", "mp4upload", "mega", "drive", "4shared", "gofile", "videa", "ok.ru", "mail.ru", "streamwish"]):
+                            continue
+                            
                         q_name = normalize_quality_name(label)
                         if q_name not in ["1080p", "720p", "480p", "360p", "240p"]:
-                            if "1080" in href or "fhd" in label:
+                            if "1080" in label or "fhd" in label or "جودة خارقة" in label:
                                 q_name = "1080p"
-                            elif "720" in href or "hd" in label:
+                            elif "720" in label or "hd" in label or "جودة عالية" in label:
                                 q_name = "720p"
-                            elif "360" in href or "sd" in label:
+                            elif "360" in label or "sd" in label or "جودة كافية" in label:
                                 q_name = "360p"
                             else:
                                 q_name = "480p"
@@ -1078,18 +1075,19 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
                         if "go.witanime" in href or "/go/" in href or "redirect" in href or "short" in href:
                             try:
                                 logger.info(f"Following shortlink redirect for fallback download link: {href}")
+                                headers = get_browser_headers(href)
                                 if hasattr(session, 'get') and hasattr(session, 'impersonate'):
-                                    resp = await session.get(href, headers=get_browser_headers(href), timeout=8)
+                                    resp = await session.get(href, headers=headers, timeout=8)
                                     if resp.url:
                                         final_url = str(resp.url)
                                 else:
-                                    async with session.get(href, headers=get_browser_headers(href), allow_redirects=True, ssl=False, timeout=8) as resp:
+                                    async with session.get(href, headers=headers, allow_redirects=True, ssl=False, timeout=8) as resp:
                                         final_url = str(resp.url)
                                 logger.info(f"Resolved shortlink final destination: {final_url}")
                             except Exception as ex:
                                 logger.warning(f"Failed resolving shortlink redirect for {href}: {ex}")
 
-                        if q_name not in resolved_links:
+                        if q_name not in resolved_links or "go.witanime" in resolved_links[q_name]:
                             resolved_links[q_name] = final_url
                             
             if not resolved_links:
