@@ -598,9 +598,20 @@ async def download_file(
                                 pass
                             last_update = now
                             
+        # Verify the file is not empty or too small (e.g. less than 1 KB) to prevent Telegram upload failures
+        if not target_path.exists() or target_path.stat().st_size < 1024:
+            logger.error(f"Downloaded file {target_path} is empty or too small ({target_path.stat().st_size if target_path.exists() else 0} bytes). Marking download as failed.")
+            if target_path.exists():
+                try: target_path.unlink()
+                except Exception: pass
+            return False
+
         return True
     except Exception:
         logger.exception(f"Error in process during direct file download from {url}")
+        if target_path.exists():
+            try: target_path.unlink()
+            except Exception: pass
         return False
 
 def parse_duration_to_seconds(dur_str: str) -> int:

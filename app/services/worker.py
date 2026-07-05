@@ -74,13 +74,10 @@ async def get_thumbnail_input(bot: Bot) -> Optional[FSInputFile]:
         logger.info(f"Downloading custom thumbnail file from Telegram file_id: {file_id}")
         file_info = await bot.get_file(file_id)
         if file_info and file_info.file_path:
-            real_url = f"http://telegram-bot-api.railway.internal:8081/file/bot{config.BOT_TOKEN}/{file_info.file_path}"
-            # Remove any double slashes in the path after the token section
-            token_part = f"/bot{config.BOT_TOKEN}/"
-            if token_part + "/" in real_url:
-                real_url = real_url.replace(token_part + "/", token_part)
-                
-            logger.info(f"Downloading custom thumbnail from live dynamic URL: {real_url}")
+            # Download custom thumbnail from Telegram cloud server to guarantee 200 OK delivery.
+            real_url = f"https://api.telegram.org/file/bot{config.BOT_TOKEN}/{file_info.file_path}"
+            
+            logger.info(f"Downloading custom thumbnail from Telegram Cloud: {real_url}")
             
             os.makedirs(os.path.dirname(raw_path), exist_ok=True)
             import aiohttp
@@ -90,7 +87,7 @@ async def get_thumbnail_input(bot: Bot) -> Optional[FSInputFile]:
                         with open(raw_path, "wb") as f:
                             f.write(await resp.read())
                     else:
-                        logger.error(f"Failed to download thumbnail from dynamic local Bot API URL (status {resp.status}): {real_url}")
+                        logger.error(f"Failed to download thumbnail from Telegram Cloud (status {resp.status}): {real_url}")
             
             if raw_path.exists() and raw_path.stat().st_size > 0:
                 success = prepare_telegram_thumbnail(raw_path, optimized_path)
