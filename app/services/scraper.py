@@ -6,6 +6,8 @@ import asyncio
 from bs4 import BeautifulSoup
 from typing import List, Dict, Any, Optional
 from urllib.parse import quote, urljoin
+
+WITANIME_DOMAIN = "witanime.life"
 from config import config
 from app.utils.user_agents import get_random_user_agent
 from app.services.anilist import get_connector
@@ -113,7 +115,7 @@ def unpack_dean_edwards(packed_text: str) -> str:
         logger.exception("Error in process: failed to unpack Dean Edwards packed JS")
         return ""
 
-def get_browser_headers(referer: str = "https://witanime.pics/") -> dict:
+def get_browser_headers(referer: str = f"https://{WITANIME_DOMAIN}/") -> dict:
     ua = get_random_user_agent()
     return {
         "User-Agent": ua,
@@ -170,7 +172,7 @@ async def resolve_anime_info(ep_url: str, session: aiohttp.ClientSession) -> Opt
 
 async def parse_m3u8_qualities(master_url: str, session: aiohttp.ClientSession) -> Dict[str, str]:
     """Parses master .m3u8 playlist to extract quality variant URLs."""
-    headers = {"User-Agent": get_random_user_agent(), "Referer": "https://witanime.pics/"}
+    headers = {"User-Agent": get_random_user_agent(), "Referer": f"https://{WITANIME_DOMAIN}/"}
     proxy_str = f" via proxy {config.PROXY_URL}" if config.PROXY_URL else ""
     logger.info(f"Scraping page: {master_url}{proxy_str}")
     
@@ -226,7 +228,7 @@ async def search_anime_scraper(title: str) -> List[Dict[str, Any]]:
         logger.info("[MOCK MODE] Simulating search result on WitAnime.")
         return [{"title": f"{title} (TV)", "slug": "mock-anime-slug"}]
 
-    search_url = f"https://witanime.pics/?search_param=anime&s={quote(normalized_title)}"
+    search_url = f"https://{WITANIME_DOMAIN}/?search_param=animes&s={quote(normalized_title)}"
     
     for attempt in range(2):
         connector = get_connector()
@@ -299,9 +301,9 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
         page_num = 1
         while True:
             if page_num == 1:
-                url = f"https://witanime.pics/anime/{anime_slug}/"
+                url = f"https://{WITANIME_DOMAIN}/anime/{anime_slug}/"
             else:
-                url = f"https://witanime.pics/anime/{anime_slug}/page/{page_num}/"
+                url = f"https://{WITANIME_DOMAIN}/anime/{anime_slug}/page/{page_num}/"
                 
             try:
                 headers = get_browser_headers(url)
@@ -322,10 +324,9 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
                     if img_el:
                         img_src = img_el.get("src") or img_el.get("data-src")
                         if img_src and "default" not in img_src:
-                            if img_src.startswith("https://witanime.you"):
-                                img_src = img_src.replace("https://witanime.you", "https://witanime.pics")
-                            elif img_src.startswith("https://witanime.life"):
-                                img_src = img_src.replace("https://witanime.life", "https://witanime.pics")
+                            # Normalize any old domain references to current domain
+                            for old_domain in ["witanime.pics", "witanime.you", "witanime.xyz"]:
+                                img_src = img_src.replace(f"https://{old_domain}", f"https://{WITANIME_DOMAIN}")
                             poster_url = img_src
                             
                     # 2. Parse description/story
@@ -355,14 +356,29 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
                 except Exception as ex:
                     logger.warning(f"Failed to parse anime page metadata: {ex}")
 
-            match = re.search(r"var processedEpisodeData = '([^']+)';", html)
-            if not match:
+            # Try encodedEpisodeData (base64 JSON) first, then processedEpisodeData (XOR encrypted)
+            episodes_data = None
+            encoded_match = re.search(r"var encodedEpisodeData = '([^']+)';", html)
+            if encoded_match:
+                try:
+                    decoded_json = base64.b64decode(encoded_match.group(1)).decode("utf-8")
+                    episodes_data = json.loads(decoded_json)
+                    logger.info(f"Decoded {len(episodes_data)} episodes from encodedEpisodeData")
+                except Exception:
+                    logger.warning("Failed to decode encodedEpisodeData, trying processedEpisodeData...")
+            
+            if not episodes_data:
+                match = re.search(r"var processedEpisodeData = '([^']+)';", html)
+                if match:
+                    episodes_data = decrypt_episodes(match.group(1))
+                    
+            if not episodes_data:
                 if page_num == 1:
-                    logger.info(f"لم يتم العثور على processedEpisodeData للأنمي {anime_slug}. يتم التعامل معه كفيلم فردي.")
+                    logger.info(f"لم يتم العثور على بيانات حلقات للأنمي {anime_slug}. يتم التعامل معه كفيلم فردي.")
                     return {
                         "episodes": [{
                             "ep_number": "1",
-                            "play_url": f"https://witanime.pics/anime/{anime_slug}/"
+                            "play_url": f"https://{WITANIME_DOMAIN}/anime/{anime_slug}/"
                         }],
                         "poster_url": poster_url,
                         "description": description,
@@ -370,19 +386,14 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
                     }
                 else:
                     break
-                    
-            episodes_data = decrypt_episodes(match.group(1))
-            if not episodes_data:
-                break
                 
             new_episodes_found = 0
             for ep in episodes_data:
                 ep_num = str(ep.get("number"))
                 play_url = ep.get("url")
-                if play_url.startswith("https://witanime.you"):
-                    play_url = play_url.replace("https://witanime.you", "https://witanime.pics")
-                elif play_url.startswith("https://witanime.life"):
-                    play_url = play_url.replace("https://witanime.life", "https://witanime.pics")
+                # Normalize any old domain references to current domain
+                for old_domain in ["witanime.pics", "witanime.you", "witanime.xyz"]:
+                    play_url = play_url.replace(f"https://{old_domain}", f"https://{WITANIME_DOMAIN}")
                 
                 if play_url not in seen_urls:
                     seen_urls.add(play_url)
@@ -580,7 +591,7 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
     if "yonaplay.net" in embed_url:
         try:
             # yonaplay requires the exact play_url as referer
-            ref = referer or "https://witanime.pics/"
+            ref = referer or f"https://{WITANIME_DOMAIN}/"
             headers = {"User-Agent": get_random_user_agent(), "Referer": ref}
             logger.info(f"Resolving yonaplay aggregator from: {embed_url} with referer: {ref}")
             
@@ -732,7 +743,7 @@ async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
         try:
             # Normalize play URL domain
             if "witanime.you" in play_url:
-                play_url = play_url.replace("https://witanime.you", "https://witanime.pics")
+                play_url = play_url.replace("https://witanime.you", f"https://{WITANIME_DOMAIN}")
                 
             html = await get_html(play_url, session)
             
