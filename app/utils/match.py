@@ -6,9 +6,9 @@ def validate_title_match(original_title: str, matched_title: str) -> bool:
     orig_lower = original_title.lower().strip()
     match_lower = matched_title.lower().strip()
     
-    # 1. Fuzzy match ratio
+    # 1. Fuzzy match ratio (strict: 0.70 to avoid false positives)
     ratio = SequenceMatcher(None, orig_lower, match_lower).ratio()
-    if ratio >= 0.55:
+    if ratio >= 0.70:
         return True
         
     # 2. Check substring containment (e.g., "Attack on Titan" is inside "Attack on Titan Season 3")
@@ -28,8 +28,8 @@ def validate_title_match(original_title: str, matched_title: str) -> bool:
         return True
         
     overlap = orig_keywords.intersection(match_keywords)
-    # If original title has important keywords, at least 60% of them must be present in the matched title
-    if len(overlap) / len(orig_keywords) >= 0.60:
+    # If original title has important keywords, at least 75% of them must be present in the matched title
+    if len(overlap) / len(orig_keywords) >= 0.75:
         return True
         
     return False

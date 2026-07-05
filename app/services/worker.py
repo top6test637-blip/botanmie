@@ -145,25 +145,10 @@ async def self_heal_episode_cache(
             if not scraper_results and cache_entry.title_english:
                 cleaned_eng = sanitize_search_query(cache_entry.title_english)
                 if cleaned_eng != cleaned_title:
-                    matched_query = cleaned_eng
                     scraper_results = await search_anime_scraper(cleaned_eng)
                     
-            if not scraper_results:
-                words = cleaned_title.split()
-                if len(words) > 3:
-                    fallback_3 = " ".join(words[:3])
-                    matched_query = fallback_3
-                    scraper_results = await search_anime_scraper(fallback_3)
-                    
-            if not scraper_results:
-                words = cleaned_title.split()
-                if len(words) > 2:
-                    fallback_2 = " ".join(words[:2])
-                    matched_query = fallback_2
-                    scraper_results = await search_anime_scraper(fallback_2)
-                    
             if scraper_results:
-                anime_slug = get_best_slug_match(scraper_results, matched_query)
+                anime_slug = get_best_slug_match(scraper_results, cleaned_title)
                 
         if not anime_slug:
             logger.error(f"Self-healing failed: Could not find matching WitAnime slug for {anime_title}")

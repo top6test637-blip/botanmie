@@ -841,3 +841,78 @@ TimeoutError
 [2026-07-04 19:23:48] [INFO] [bot] [main.py:99]: Testing proxy connectivity...
 [2026-07-04 19:23:48] [WARNING] [bot] [main.py:108]: SOCKS5 proxy health check failed: Username and password authentication failure. Disabling proxy and falling back to direct connections.
 [2026-07-04 19:23:48] [INFO] [bot] [main.py:115]: Initializing database schema...
+[2026-07-05 04:22:40] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-05 04:22:40] [INFO] [bot] [scraper.py:226]: Starting search for anime: Frieren (original: Frieren)
+[2026-07-05 04:22:40] [INFO] [bot] [scraper.py:139]: Scraping page: https://witanime.life/?search_param=animes&s=Frieren via proxy socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-05 04:22:40] [INFO] [bot] [scraper.py:142]: Proxy used for request: socks5://yzjbjptm:mxykfsyptk4x@38.154.203.95:5863
+[2026-07-05 04:22:41] [ERROR] [bot] [scraper.py:150]: Error in process while fetching HTML from https://witanime.life/?search_param=animes&s=Frieren
+Traceback (most recent call last):
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\python_socks\async_\asyncio\v2\_proxy.py", line 130, in _connect
+    await connector.connect(
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\python_socks\_connectors\socks5_async.py", line 56, in connect
+    _: socks5.AuthReply = conn.receive(data)
+                          ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\python_socks\_protocols\socks5.py", line 346, in receive
+    reply = AuthReply.loads(data)
+            ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\python_socks\_protocols\socks5.py", line 152, in loads
+    raise ReplyError('Username and password authentication failure')
+python_socks._protocols.errors.ReplyError: Username and password authentication failure
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp_socks\connector.py", line 72, in _wrap_create_connection
+    return await self._connect_via_proxy(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp_socks\connector.py", line 135, in _connect_via_proxy
+    stream = await proxy.connect(
+             ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\python_socks\async_\asyncio\v2\_proxy.py", line 79, in connect
+    return await self._connect(
+           ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\python_socks\async_\asyncio\v2\_proxy.py", line 143, in _connect
+    raise ProxyError(e, error_code=e.error_code)
+python_socks._errors.ProxyError: Username and password authentication failure
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\app\services\scraper.py", line 145, in get_html
+    async with session.get(url, headers=headers, ssl=False, timeout=15) as response:
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 1683, in __aenter__
+    self._resp: _RetType_co = await self._coro
+                              ^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 856, in _request
+    resp = await handler(req)
+           ^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\client.py", line 810, in _connect_and_send_request
+    conn = await self._connector.connect(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 657, in connect
+    proto = await self._create_connection(req, traces, timeout)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1242, in _create_connection
+    _, proto = await self._create_direct_connection(req, traces, timeout)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp\connector.py", line 1589, in _create_direct_connection
+    transp, proto = await self._wrap_create_connection(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\monsm\OneDrive\Desktop\BOT\.venv\Lib\site-packages\aiohttp_socks\connector.py", line 83, in _wrap_create_connection
+    raise ProxyError(str(e), error_code=e.error_code) from e
+aiohttp_socks._errors.ProxyError: Username and password authentication failure
+[2026-07-05 04:22:41] [WARNING] [bot] [scraper.py:271]: Proxy failure during WitAnime search: Connection failed: Username and password authentication failure. Disabling proxy.
+[2026-07-05 04:22:41] [INFO] [bot] [scraper.py:236]: Retrying WitAnime search directly (bypassing proxy)...
+[2026-07-05 04:22:41] [INFO] [bot] [scraper.py:139]: Scraping page: https://witanime.life/?search_param=animes&s=Frieren
+[2026-07-05 04:22:41] [INFO] [bot] [scraper.py:244]: Found 2 posts matching search query on witanime.life.
+[2026-07-05 04:22:41] [INFO] [bot] [scraper.py:267]: Resolved 2 unique anime series from search results.
+[2026-07-05 04:22:41] [INFO] [bot] [scraper.py:226]: Starting search for anime: One Piece (original: One Piece)
+[2026-07-05 04:22:41] [INFO] [bot] [scraper.py:139]: Scraping page: https://witanime.life/?search_param=animes&s=One%20Piece
+[2026-07-05 04:22:41] [INFO] [bot] [scraper.py:244]: Found 28 posts matching search query on witanime.life.
+[2026-07-05 04:22:41] [INFO] [bot] [scraper.py:267]: Resolved 28 unique anime series from search results.
+[2026-07-05 04:22:41] [INFO] [bot] [scraper.py:282]: جاري جلب قائمة الحلقات للأنمي: sousou-no-frieren
+[2026-07-05 04:22:41] [INFO] [bot] [scraper.py:366]: Decoded 28 episodes from encodedEpisodeData
+[2026-07-05 04:22:41] [INFO] [bot] [scraper.py:410]: تم جلب 28 حلقة جديدة من الصفحة 1
+[2026-07-05 04:22:42] [INFO] [bot] [scraper.py:366]: Decoded 28 episodes from encodedEpisodeData
+[2026-07-05 04:22:42] [INFO] [bot] [scraper.py:407]: لم يتم العثور على حلقات جديدة في الصفحة 2. إيقاف جلب الصفحات.
+[2026-07-05 04:22:42] [INFO] [bot] [scraper.py:420]: إجمالي الحلقات المستخرجة للأنمي sousou-no-frieren: 28

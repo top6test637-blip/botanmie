@@ -202,22 +202,8 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
                     matched_query = cleaned_eng
                     scraper_results = await search_anime_scraper(cleaned_eng)
                     
-            if not scraper_results:
-                words = cleaned_title.split()
-                if len(words) > 3:
-                    fallback_3 = " ".join(words[:3])
-                    matched_query = fallback_3
-                    logger.info(f"Fallback Search (3 words): Trying '{fallback_3}'")
-                    scraper_results = await search_anime_scraper(fallback_3)
-                    
-            if not scraper_results:
-                words = cleaned_title.split()
-                if len(words) > 2:
-                    fallback_2 = " ".join(words[:2])
-                    matched_query = fallback_2
-                    logger.info(f"Fallback Search (2 words): Trying '{fallback_2}'")
-                    scraper_results = await search_anime_scraper(fallback_2)
-                    
+            # Single-Attempt: If both romaji and English title return 0 results, stop.
+            # No word-stripping fallback loops — they waste tokens and return inaccurate results.
             if not scraper_results:
                 try:
                     await callback.message.edit_text("❌ لم يتم العثور على هذا الأنمي في خوادم البث المساعدة.")
@@ -228,7 +214,7 @@ async def handle_anime_selection(callback: CallbackQuery, db_session: AsyncSessi
                         pass
                 return
                 
-            anime_slug = get_best_slug_match(scraper_results, matched_query)
+            anime_slug = get_best_slug_match(scraper_results, cleaned_title)
 
     scraped_data = None
     if anime_slug:

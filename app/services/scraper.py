@@ -240,8 +240,8 @@ async def search_anime_scraper(title: str) -> List[Dict[str, Any]]:
                 html = await get_html(search_url, session)
                 soup = BeautifulSoup(html, "html.parser")
                 
-                details = soup.select(".cat-post-details h2 a")
-                logger.info(f"Found {len(details)} posts matching search query.")
+                details = soup.select(".anime-card-title a")
+                logger.info(f"Found {len(details)} posts matching search query on {WITANIME_DOMAIN}.")
                 
                 # Resolve parent series concurrently
                 resolve_tasks = []
