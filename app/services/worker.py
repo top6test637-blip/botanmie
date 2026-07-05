@@ -52,35 +52,8 @@ async def get_thumbnail_input(bot: Bot) -> Optional[FSInputFile]:
     return None
 
 async def get_video_thumbnail(bot: Bot, db_session_factory, anilist_id: int) -> Optional[FSInputFile]:
-    """Retrieves custom admin thumbnail first, or falls back to AniList poster image as video cover art."""
-    admin_thumb = await get_thumbnail_input(bot)
-    if admin_thumb:
-        return admin_thumb
-
-    try:
-        from app.database.models import SearchCache
-        async with db_session_factory() as session:
-            stmt = select(SearchCache).where(SearchCache.anilist_id == anilist_id)
-            res = await session.execute(stmt)
-            cache_entry = res.scalars().first()
-            if cache_entry and cache_entry.image_url:
-                poster_url = cache_entry.image_url
-                poster_path = config.DOWNLOAD_DIR / f"poster_{anilist_id}.jpg"
-                if poster_path.exists() and (time.time() - poster_path.stat().st_mtime < 86400):
-                    return FSInputFile(str(poster_path))
-                
-                import aiohttp
-                async with aiohttp.ClientSession() as s:
-                    async with s.get(poster_url, timeout=10) as resp:
-                        if resp.status == 200:
-                            data = await resp.read()
-                            with open(poster_path, "wb") as f:
-                                f.write(data)
-                            return FSInputFile(str(poster_path))
-    except Exception as e:
-        logger.warning(f"Failed to fetch AniList cover image thumbnail: {e}")
-        
-    return None
+    """Retrieves custom admin thumbnail strictly and exclusively as video cover art."""
+    return await get_thumbnail_input(bot)
 
 async def save_telegram_file_cache(db_session_factory, anilist_id: int, ep_number: str, quality: str, file_id: str):
     """Persists Telegram file_id to TelegramFileCache table for zero-second instant delivery after restarts."""

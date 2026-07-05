@@ -264,22 +264,6 @@ async def prompt_quality_selection(
             InlineKeyboardButton(text="📱 اختر الجودة في الميني أب (Mini App)", web_app=WebAppInfo(url=q_webapp_url))
         ])
 
-    q_keys = list(qualities.keys())
-    import re
-    def get_q_res(k):
-        m = re.search(r'(\d+)', k)
-        return int(m.group(1)) if m else 0
-    q_keys.sort(key=get_q_res, reverse=True)
-    
-    row = []
-    for q_name in q_keys:
-        row.append(InlineKeyboardButton(text=f"⚙️ {q_name}", callback_data=f"dl:{q_name}:{db_cache_id}"))
-        if len(row) == 2:
-            keyboard_buttons.append(row)
-            row = []
-    if row:
-        keyboard_buttons.append(row)
-        
     keyboard_buttons.append([
         InlineKeyboardButton(text="🔙 رجوع للحلقات", callback_data=f"nav_grid:{anilist_id}")
     ])
