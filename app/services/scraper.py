@@ -585,22 +585,32 @@ async def get_episodes_scraper(anime_slug: str) -> Dict[str, Any]:
             "duration": "24 دقيقة"
         }
 
-    # If it is a Gogoanime slug
-    if any(domain in anime_slug for domain in GOGOANIME_DOMAINS) or not ("witanime" in anime_slug or anime_slug.startswith("witanime")):
+    # 1. If explicitly a Gogoanime domain/slug, use Gogoanime first
+    if any(domain in anime_slug for domain in GOGOANIME_DOMAINS):
         gogo_res = await get_episodes_gogoanime(anime_slug)
         if gogo_res and gogo_res.get("episodes"):
             return gogo_res
 
-    # WitAnime
-    if CURL_CFFI_AVAILABLE and CurlAsyncSession:
-        logger.info("Using curl_cffi for get_episodes_scraper")
-        proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
-        async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
-            return await _run_get_episodes(session, anime_slug)
-    else:
-        connector = get_connector()
-        async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
-            return await _run_get_episodes(session, anime_slug)
+    # 2. Try WitAnime scraper
+    try:
+        if CURL_CFFI_AVAILABLE and CurlAsyncSession:
+            logger.info("Using curl_cffi for get_episodes_scraper")
+            proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
+            async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
+                res = await _run_get_episodes(session, anime_slug)
+        else:
+            connector = get_connector()
+            async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
+                res = await _run_get_episodes(session, anime_slug)
+        
+        if res and res.get("episodes"):
+            return res
+    except Exception as e:
+        logger.warning(f"WitAnime get_episodes failed for {anime_slug}: {e}")
+
+    # 3. Fallback to Gogoanime if WitAnime returned no episodes
+    logger.info(f"WitAnime returned no episodes for {anime_slug}, falling back to Gogoanime...")
+    return await get_episodes_gogoanime(anime_slug)
 
 async def get_download_links_scraper(play_url: str) -> Dict[str, str]:
     logger.info(f"Scraping download links from watch page: {play_url}")
@@ -1623,87 +1633,6 @@ async def get_download_links_gogoanime(play_url: str) -> Dict[str, str]:
     except Exception as e:
         logger.exception(f"Error getting Gogoanime download links: {e}")
         return {}
-
-async def get_episodes_gogoanime(anime_slug: str) -> Dict[str, Any]:
-    """Retrieves episode list for a Gogoanime series slug."""
-    logger.info(f"Fetching Gogoanime episodes for slug: {anime_slug}")
-    url = f"https://{GOGOANIME_DOMAIN}/category/{anime_slug}"
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(url, headers=get_browser_headers(url), timeout=15) as resp:
-                if resp.status != 200:
-                    logger.warning(f"Gogoanime episodes page failed with status {resp.status}")
-                    return {"episodes": []}
-                html = await resp.text()
-                soup = BeautifulSoup(html, "html.parser")
-                # Find episode list container
-                ep_list = soup.select("#episode_page li a")
-                if not ep_list:
-                    # Try alternative selector
-                    ep_list = soup.select(".episodes-list a")
-                episodes = []
-                for a in ep_list:
-                    ep_num = a.text.strip()
-                    href = a.get("href")
-                    if href and "/" in href:
-                        # Extract episode ID from link: /watch/...-episode-1
-                        ep_id = href.split("/")[-1].strip()
-                        if ep_id:
-                            episodes.append({
-                                "ep_number": ep_num,
-                                "play_url": f"https://{GOGOANIME_DOMAIN}/watch/{ep_id}"
-                            })
-                # Reverse to get correct order (latest first, but we want ascending)
-                episodes.reverse()
-                # Sort by number if possible
-                try:
-                    episodes.sort(key=lambda x: float(x["ep_number"]) if x["ep_number"].replace(".", "").isdigit() else 999999)
-                except:
-                    pass
-                logger.info(f"Gogoanime found {len(episodes)} episodes")
-                return {"episodes": episodes}
-        except Exception as e:
-            logger.exception(f"Error fetching Gogoanime episodes: {e}")
-            return {"episodes": []}
-
-async def get_download_links_gogoanime(play_url: str) -> Dict[str, str]:
-    """Extracts download/stream links from a Gogoanime watch page."""
-    logger.info(f"Getting Gogoanime download links for: {play_url}")
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(play_url, headers=get_browser_headers(play_url), timeout=15) as resp:
-                if resp.status != 200:
-                    logger.warning(f"Gogoanime watch page failed with status {resp.status}")
-                    return {}
-                html = await resp.text()
-                soup = BeautifulSoup(html, "html.parser")
-                # Find iframe source or video source
-                # Gogoanime usually uses iframe for video player
-                iframe = soup.select_one("iframe")
-                if iframe and iframe.get("src"):
-                    embed_url = iframe["src"]
-                    # Resolve embed (could be another page)
-                    # For simplicity, we can try to get the video source from the embed page
-                    async with session.get(embed_url, headers=get_browser_headers(embed_url)) as embed_resp:
-                        if embed_resp.status == 200:
-                            embed_html = await embed_resp.text()
-                            # Try to find video source in embed
-                            video_src = re.search(r'src=["\']([^"\']+\.mp4[^"\']*)["\']', embed_html)
-                            if video_src:
-                                return {"720p": video_src.group(1)}
-                            # Try HLS
-                            hls_src = re.search(r'src=["\']([^"\']+\.m3u8[^"\']*)["\']', embed_html)
-                            if hls_src:
-                                return {"720p": hls_src.group(1)}
-                # If no iframe, try to find direct video source in page
-                video_src = re.search(r'<source\s+src=["\']([^"\']+\.mp4[^"\']*)["\']', html)
-                if video_src:
-                    return {"720p": video_src.group(1)}
-                return {}
-        except Exception as e:
-            logger.exception(f"Error getting Gogoanime download links: {e}")
-            return {}
-
 
 async def resolve_anime_slug_scraper(
     title_romaji: Optional[str], 

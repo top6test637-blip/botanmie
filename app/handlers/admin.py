@@ -1260,23 +1260,59 @@ async def handle_admin_toggle_sub(callback: CallbackQuery, db_session: AsyncSess
         
     await safe_answer(callback)
     
-    active_channel = config.CHANNEL_USERNAME or "تعطيل / Disabled"
+    channels = [c.strip() for c in (config.CHANNEL_USERNAME or "").replace(",", " ").split() if c.strip()]
     
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✏️ تغيير القناة", callback_data="admin_change_channel"),
-            InlineKeyboardButton(text="❌ تعطيل الاشتراك الإجباري", callback_data="admin_disable_sub")
-        ],
-        [InlineKeyboardButton(text="🔙 رجوع للوحة التحكم", callback_data="admin_home")]
-    ])
+    keyboard_buttons = []
+    
+    if channels:
+        for ch in channels:
+            keyboard_buttons.append([InlineKeyboardButton(text=f"❌ حذف القناة {ch}", callback_data=f"admin_del_chan:{ch}")])
+            
+    keyboard_buttons.append([InlineKeyboardButton(text="➕ إضافة قناة جديدة", callback_data="admin_add_channel")])
+    
+    if channels:
+        keyboard_buttons.append([InlineKeyboardButton(text="🗑️ مسح جميع القنوات (تعطيل الإجباري)", callback_data="admin_disable_sub")])
+        
+    keyboard_buttons.append([InlineKeyboardButton(text="🔙 رجوع للوحة التحكم", callback_data="admin_home")])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    
+    chans_text = "\n".join([f"• <b>{ch}</b>" for ch in channels]) if channels else "<i>لا توجد قنوات مفعلة (معطل)</i>"
     
     await callback.message.edit_text(
-        f"🔒 <b>إعدادات الاشتراك الإجباري:</b>\n\n"
-        f"القناة الحالية: <b>{active_channel}</b>\n\n"
-        f"يمكنك تغيير القناة أو تعطيل الاشتراك تماماً باستخدام الأزرار أدناه:",
+        f"🔒 <b>إعدادات قنوات الاشتراك الإجباري:</b>\n\n"
+        f"📋 <b>القنوات المفعلة حالياً ({len(channels)}):</b>\n"
+        f"{chans_text}\n\n"
+        f"💡 يمكنك إضافة قناة جديدة أو حذف أي قناة بالنقر على زر الحذف الخاص بها مباشرة من الأسفل:",
         reply_markup=keyboard,
         parse_mode="HTML"
     )
+
+
+@router.callback_query(F.data.startswith("admin_del_chan:"))
+async def handle_admin_delete_channel(callback: CallbackQuery, db_session: AsyncSession):
+    authorized = await is_admin(callback.from_user.id, db_session)
+    if not authorized:
+        await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
+        return
+        
+    target_chan = callback.data.split(":", 1)[1].strip()
+    channels = [c.strip() for c in (config.CHANNEL_USERNAME or "").replace(",", " ").split() if c.strip()]
+    
+    if target_chan in channels:
+        channels.remove(target_chan)
+        
+    final_val = ", ".join(channels) if channels else None
+    config.CHANNEL_USERNAME = final_val
+    
+    from app.utils.settings import set_setting, delete_setting
+    if final_val:
+        await set_setting("channel_username", final_val)
+    else:
+        await delete_setting("channel_username")
+        
+    await safe_answer(callback, f"✅ تم حذف القناة {target_chan} بنجاح.", show_alert=True)
+    await handle_admin_toggle_sub(callback, db_session)
 
 
 @router.callback_query(F.data == "admin_disable_sub")
@@ -1289,12 +1325,12 @@ async def handle_admin_disable_sub(callback: CallbackQuery, db_session: AsyncSes
     config.CHANNEL_USERNAME = None
     from app.utils.settings import delete_setting
     await delete_setting("channel_username")
-    await safe_answer(callback, "✅ تم تعطيل الاشتراك الإجباري بنجاح.", show_alert=True)
+    await safe_answer(callback, "✅ تم مسح جميع القنوات وتعطيل الاشتراك الإجباري بنجاح.", show_alert=True)
     await handle_admin_toggle_sub(callback, db_session)
 
 
-@router.callback_query(F.data == "admin_change_channel")
-async def handle_admin_change_channel(callback: CallbackQuery, db_session: AsyncSession, state: FSMContext):
+@router.callback_query(F.data == "admin_add_channel")
+async def handle_admin_add_channel(callback: CallbackQuery, db_session: AsyncSession, state: FSMContext):
     authorized = await is_admin(callback.from_user.id, db_session)
     if not authorized:
         await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
@@ -1308,8 +1344,9 @@ async def handle_admin_change_channel(callback: CallbackQuery, db_session: Async
     ])
     
     await callback.message.edit_text(
-        "✏️ <b>تغيير قناة الاشتراك الإجباري:</b>\n\n"
-        "يرجى إرسال معرف القناة الجديد يبدأ بـ `@` (مثال: `@botanmie_channel`):",
+        "➕ <b>إضافة قناة جديدة للاشتراك الإجباري:</b>\n\n"
+        "يرجى إرسال معرف القناة الجديدة يبدأ بـ `@` (مثال: `@botanmie_channel`):\n\n"
+        "<i>سيتم إضافة هذه القناة إلى قائمة القنوات الحالية.</i>",
         reply_markup=keyboard,
         parse_mode="HTML"
     )
@@ -1322,22 +1359,36 @@ async def process_admin_channel(message: Message, db_session: AsyncSession, stat
         return
         
     text = message.text.strip()
-    channels = [c.strip() for c in text.replace(",", " ").split() if c.strip()]
-    if not channels:
+    new_inputs = [c.strip() for c in text.replace(",", " ").split() if c.strip()]
+    if not new_inputs:
         await message.answer("❌ يرجى إدخال معرف قناة صالح يبدأ بـ `@`.")
         return
         
-    for ch in channels:
+    for ch in new_inputs:
         if not ch.startswith("@"):
-            await message.answer(f"❌ معرف غير صالح: <code>{ch}</code>.\nيجب أن تبدأ كافة المعرفات بـ `@` (مثال: `@channel1, @channel2`). يرجى المحاولة مجدداً.", parse_mode="HTML")
+            await message.answer(f"❌ معرف غير صالح: <code>{ch}</code>.\nيجب أن يبدأ المعرف بـ `@` (مثال: `@mychannel`). يرجى المحاولة مجدداً.", parse_mode="HTML")
             return
             
-    final_val = ", ".join(channels)
+    existing_channels = [c.strip() for c in (config.CHANNEL_USERNAME or "").replace(",", " ").split() if c.strip()]
+    for ch in new_inputs:
+        if ch not in existing_channels:
+            existing_channels.append(ch)
+            
+    final_val = ", ".join(existing_channels)
     config.CHANNEL_USERNAME = final_val
     from app.utils.settings import set_setting
     await set_setting("channel_username", final_val)
     await state.clear()
-    await message.answer(f"✅ تم تحديث قنوات الاشتراك الإجباري بنجاح إلى:\n<b>{final_val}</b>", parse_mode="HTML")
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⚙️ العودة لقائمة القنوات بالأزرار", callback_data="admin_toggle_sub")]
+    ])
+    await message.answer(
+        f"✅ <b>تمت إضافة القنوات بنجاح!</b>\n\n"
+        f"القنوات المفعلة حالياً:\n<b>{final_val}</b>",
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
 
 
 @router.callback_query(F.data == "admin_set_bg")
