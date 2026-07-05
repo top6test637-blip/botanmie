@@ -641,6 +641,7 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
             t_param = result[:16]
             
             xml_url = f"https://videa.hu/player/xml?v={video_id}&_s={random_seed}&_t={t_param}"
+            headers = get_browser_headers(embed_url)
             xml_headers = {
                 "User-Agent": headers.get("User-Agent", get_random_user_agent()),
                 "Referer": embed_url
@@ -929,6 +930,9 @@ async def get_m3u8_from_embed(embed_url: str, session: aiohttp.ClientSession, re
                 script_match = re.search(r"eval\(function\(p,a,c,k,e,d\).*?\.split\(['\"]\|['\"]\)\)\)", text, re.DOTALL)
                 if script_match:
                     unpacked = unpack_dean_edwards(script_match.group(0))
+                    if unpacked is None or not isinstance(unpacked, (str, bytes)):
+                        logger.warning("Unpacked payload returned None. Skipping regex parsing for this mirror.")
+                        continue
                     m3u8_matches = re.findall(r'https?://[^\s"\']+\.m3u8[^\s"\']*', unpacked)
                     if m3u8_matches:
                         m3u8_url = m3u8_matches[0]

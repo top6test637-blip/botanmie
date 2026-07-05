@@ -13,6 +13,7 @@ from config import config
 from app.utils.user_agents import get_random_user_agent
 from app.services.anilist import get_connector
 from app.utils.logging_config import logger
+from app.services.scraper import get_browser_headers
 
 class AdaptiveSemaphore:
     def __init__(self, initial_limit: int):
