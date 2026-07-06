@@ -168,7 +168,7 @@ async def acquire_lock(anilist_id: int, ep_number: str, task_id: int, db_session
             if existing_lock:
                 if existing_lock.locked_at:
                     delta = (datetime.now(timezone.utc) - existing_lock.locked_at).total_seconds()
-                    if delta > 600:
+                    if delta > 1200:
                         logger.warning(f"Clearing expired lock on anilist_id={anilist_id}, ep={ep_number} (age: {delta:.0f}s)")
                         await session.delete(existing_lock)
                         await session.commit()
@@ -219,24 +219,14 @@ async def recover_stuck_tasks(db_session_factory):
             res = await session.execute(stmt)
             stuck_tasks = res.scalars().all()
             for task in stuck_tasks:
-                logger.info(f"Recovering stuck task {task.id} (status: {task.status}) on boot. Resetting to 'pending'.")
                 task.status = "pending"
-                task.updated_at = datetime.now(timezone.utc)
-            if stuck_tasks:
-                await session.commit()
-    except Exception:
-        logger.exception("Error during task recovery on boot")
+                logger.info(f"Recovering stuck task {task.id} (status: processing) on boot. Resetting to 'pending'.")
+            await session.commit()
+    except Exception as e:
+        logger.exception(f"Error recovering stuck tasks on boot: {e}")
 
-async def _process_single_task_wrapper(
-    task_id: int,
-    user_id: int,
-    chat_id: int,
-    message_id: Optional[int],
-    anilist_id: int,
-    anime_title: str,
-    episode_num: str,
-    quality: str,
-    bot: Bot,
+async def process_task_with_timeout(
+    task_id, user_id, chat_id, message_id, anilist_id, anime_title, episode_num, quality, bot,
     db_session_factory
 ):
     success = False
@@ -246,7 +236,7 @@ async def _process_single_task_wrapper(
             execute_queued_task(
                 task_id, user_id, chat_id, message_id, anilist_id, anime_title, episode_num, quality, bot, db_session_factory
             ),
-            timeout=600  # 10 minutes max
+            timeout=1200  # 20 minutes max for slow connections
         )
         if result == "LOCKED_WAIT":
             is_locked_wait = True
@@ -254,7 +244,7 @@ async def _process_single_task_wrapper(
         else:
             success = bool(result)
     except asyncio.TimeoutError:
-        logger.error(f"Task {task_id} timed out after 600 seconds")
+        logger.error(f"Task {task_id} timed out after 1200 seconds")
         success = False
     except (asyncio.CancelledError, Exception) as e:
         logger.exception(f"Error or cancellation processing task ID {task_id}: {e}")

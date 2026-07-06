@@ -611,7 +611,7 @@ async def download_file(
     
     try:
         async with aiohttp.ClientSession(connector=connector, headers=keep_alive_headers) as session:
-            client_timeout = aiohttp.ClientTimeout(total=None, sock_read=60)
+            client_timeout = aiohttp.ClientTimeout(total=None, sock_read=180)
             async with session.get(url, headers=headers, allow_redirects=True, ssl=False, timeout=client_timeout) as response:
                 content_type = response.headers.get("Content-Type", "").lower()
                 if "text/html" in content_type:
