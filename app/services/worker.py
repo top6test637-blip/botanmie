@@ -519,7 +519,45 @@ async def self_heal_episode_cache(
             (EpisodeCache.anilist_id == anilist_id) & (EpisodeCache.ep_number == episode_num)
         )
         res_final = await session.execute(stmt_final)
-        return res_final.scalar_one_or_none()
+        final_ep = res_final.scalar_one_or_none()
+        
+        if final_ep:
+            return final_ep
+            
+        # Fallback: Scrape Gogoanime for the missing episode
+        logger.info(f"Self-healing: Episode {episode_num} not found on WitAnime. Trying Gogoanime fallback...")
+        try:
+            from app.services.scraper import search_anime_gogoanime, get_best_slug_match, get_episodes_gogoanime
+            search_title = cache_entry.title_romaji or cache_entry.title_english or anime_title
+            gogo_results = await search_anime_gogoanime(search_title)
+            if gogo_results:
+                gogo_slug = get_best_slug_match(gogo_results, search_title)
+                if gogo_slug:
+                    logger.info(f"Self-healing: Found matching Gogoanime slug '{gogo_slug}'. Scraping Gogoanime episodes...")
+                    gogo_scraped = await get_episodes_gogoanime(gogo_slug)
+                    if gogo_scraped and gogo_scraped.get("episodes"):
+                        for ep in gogo_scraped["episodes"]:
+                            # Skip if already exists
+                            stmt_check = select(EpisodeCache).where(
+                                (EpisodeCache.anilist_id == anilist_id) & (EpisodeCache.ep_number == ep["ep_number"])
+                            )
+                            check_res = await session.execute(stmt_check)
+                            if not check_res.scalar_one_or_none():
+                                db_ep = EpisodeCache(
+                                    anilist_id=anilist_id,
+                                    ep_number=ep["ep_number"],
+                                    play_url=ep["play_url"]
+                                )
+                                session.add(db_ep)
+                        await session.commit()
+                        
+                        # Re-fetch the episode
+                        res_final = await session.execute(stmt_final)
+                        return res_final.scalar_one_or_none()
+        except Exception as e:
+            logger.warning(f"Self-healing: Gogoanime fallback failed: {e}")
+            
+        return None
 
 async def execute_queued_task(
     task_id: int,
