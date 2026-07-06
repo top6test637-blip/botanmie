@@ -72,28 +72,37 @@ async def get_thumbnail_input(bot: Bot) -> Optional[BufferedInputFile]:
             return BufferedInputFile(tf.read(), filename="thumb.jpg")
         
     try:
-        logger.info(f"Downloading custom thumbnail file from Telegram file_id: {file_id}")
+        logger.info(f"Downloading/Retrieving custom thumbnail file from Telegram file_id: {file_id}")
         file_info = await bot.get_file(file_id)
         if file_info and file_info.file_path:
-            file_path = file_info.file_path
-            # Extract standard relative path if Bot API server is running in local mode and returns absolute disk path
-            if "/" in file_path:
-                for prefix in ["photos/", "documents/", "video/", "voice/", "stickers/", "music/"]:
-                    if prefix in file_path:
-                        file_path = prefix + file_path.split(prefix, 1)[1]
-                        break
-            
-            logger.info(f"Downloading custom thumbnail from Telegram path: {file_path}")
-            os.makedirs(os.path.dirname(raw_path), exist_ok=True)
-            
-            dl_url = f"https://api.telegram.org/file/bot{config.BOT_TOKEN}/{file_path}"
-            async with aiohttp.ClientSession() as session:
-                async with session.get(dl_url, timeout=30) as resp:
-                    if resp.status == 200:
-                        with open(raw_path, "wb") as f:
-                            f.write(await resp.read())
-                    else:
-                        raise Exception(f"Official Telegram API returned status {resp.status}")
+            # 1. Check if it's a local file and exists (Shared Volume / Same Container setup)
+            local_file_path = Path(file_info.file_path)
+            if local_file_path.is_absolute() and local_file_path.exists():
+                logger.info(f"Local file system hit: Copying custom thumbnail directly from {local_file_path}")
+                import shutil
+                os.makedirs(os.path.dirname(raw_path), exist_ok=True)
+                shutil.copy2(local_file_path, raw_path)
+            else:
+                # 2. Fallback to direct HTTP download from official cloud API
+                file_path = file_info.file_path
+                # Extract standard relative path if Bot API server is running in local mode and returns absolute disk path
+                if "/" in file_path:
+                    for prefix in ["photos/", "documents/", "video/", "voice/", "stickers/", "music/"]:
+                        if prefix in file_path:
+                            file_path = prefix + file_path.split(prefix, 1)[1]
+                            break
+                
+                logger.info(f"Downloading custom thumbnail from Telegram path: {file_path}")
+                os.makedirs(os.path.dirname(raw_path), exist_ok=True)
+                
+                dl_url = f"https://api.telegram.org/file/bot{config.BOT_TOKEN}/{file_path}"
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(dl_url, timeout=30) as resp:
+                        if resp.status == 200:
+                            with open(raw_path, "wb") as f:
+                                f.write(await resp.read())
+                        else:
+                            raise Exception(f"Official Telegram API returned status {resp.status}")
             
             if raw_path.exists() and raw_path.stat().st_size > 0:
                 success = prepare_telegram_thumbnail(raw_path, optimized_path)
