@@ -1554,13 +1554,15 @@ GOGOANIME_DOMAINS = [
 ]
 
 async def search_anime_gogoanime(title: str) -> List[Dict[str, Any]]:
-    logger.info(f"Searching Gogoanime for: {title}")
+    logger.info(f"Searching Gogoanime for query: '{title}' across domains: {GOGOANIME_DOMAINS}")
     for domain in GOGOANIME_DOMAINS:
         search_url = f"https://{domain}/search.html?keyword={quote(title)}"
+        logger.info(f"Trying Gogoanime search on domain: {domain}")
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(search_url, headers=get_browser_headers(search_url), timeout=15) as resp:
+                async with session.get(search_url, headers=get_browser_headers(search_url), timeout=12) as resp:
                     if resp.status != 200:
+                        logger.warning(f"Gogoanime domain {domain} returned HTTP {resp.status}")
                         continue
                     html = await resp.text()
                     soup = BeautifulSoup(html, "html.parser")
@@ -1573,10 +1575,12 @@ async def search_anime_gogoanime(title: str) -> List[Dict[str, Any]]:
                             title_text = a.get("title") or a.text.strip()
                             results.append({"title": title_text, "slug": slug})
                     if results:
-                        logger.info(f"Gogoanime ({domain}) returned {len(results)} results")
+                        logger.info(f"SUCCESS: Gogoanime ({domain}) returned {len(results)} search results for '{title}'")
                         return results
         except Exception as e:
             logger.warning(f"Gogoanime search failed on {domain}: {e}")
+            
+    logger.warning(f"All Gogoanime search domains failed for query: '{title}'")
     return []
 
 async def get_episodes_gogoanime(anime_slug: str) -> Dict[str, Any]:

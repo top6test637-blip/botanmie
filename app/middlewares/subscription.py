@@ -91,7 +91,16 @@ class SubscriptionMiddleware(BaseMiddleware):
             except Exception:
                 pass
 
-        # Check if CHANNEL_USERNAME is configured
+        # Check if force subscription is disabled via DB settings or config
+        if db_session:
+            try:
+                from app.utils.settings import get_setting
+                force_sub = await get_setting("force_sub_enabled", "true")
+                if force_sub == "false":
+                    return await handler(event, data)
+            except Exception:
+                pass
+
         if not config.CHANNEL_USERNAME:
             return await handler(event, data)
 
