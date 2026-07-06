@@ -42,7 +42,7 @@ class AdaptiveSemaphore:
 
 
 MAX_CONCURRENT_SEGMENTS = 16
-MULTIPART_THREADS = 12
+MULTIPART_THREADS = 4
 
 MAX_TELEGRAM_STANDARD_SIZE = 50 * 1024 * 1024       # 50 MB
 MAX_TELEGRAM_LOCAL_SIZE = 2 * 1024 * 1024 * 1024     # 2 GB
@@ -592,7 +592,7 @@ async def download_file(
     # Use multipart parallel downloader for direct files to bypass speed caps ONLY if Accept-Ranges is supported
     # Use multipart parallel downloader for direct files to bypass speed caps ONLY if Accept-Ranges is supported and not a known blocked domain
     if total_size > 5 * 1024 * 1024:
-        is_blocked_domain = any(domain in url.lower() for domain in ["mp4upload", "yourupload", "mail.ru", "ok.ru", "okcdn", "mycdn"])
+        is_blocked_domain = any(domain in url.lower() for domain in ["mp4upload", "yourupload", "vidcache", "mail.ru", "ok.ru", "okcdn", "mycdn"])
         supports_ranges = False
         if not is_blocked_domain:
             try:
