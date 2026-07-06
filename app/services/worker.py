@@ -575,7 +575,7 @@ async def execute_queued_task(
         logger.warning(f"Failed to find episode in EpisodeCache for {anilist_id} ep {episode_num}. Triggering self-healing fallback...")
         if status_msg_id:
             try:
-                await bot.edit_message_text("🔄 لم يتم العثور على الحلقة بالكاش. جاري جلب وتحديث الحلقات من المخدم المساعد تلقائياً...", chat_id=chat_id, message_id=status_msg_id)
+                await bot.edit_message_text("⚡ جاري تحضير واستخراج روابط الحلقة من المخدم...", chat_id=chat_id, message_id=status_msg_id)
             except Exception: pass
             
         ep_entry = await self_heal_episode_cache(anilist_id, anime_title, episode_num, db_session_factory)

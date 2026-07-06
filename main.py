@@ -194,6 +194,18 @@ async def webapp_episodes(anilist_id: int):
             res = await db_session.execute(stmt)
             episodes = list(res.scalars().all())
             
+            if not episodes:
+                stmt_s = select(SearchCache).where(SearchCache.anilist_id == anilist_id)
+                res_s = await db_session.execute(stmt_s)
+                sc_entry = res_s.scalars().first()
+                title_query = sc_entry.title_english or sc_entry.title_romaji if sc_entry else f"أنمي {anilist_id}"
+                from app.services.worker import self_heal_episode_cache
+                await self_heal_episode_cache(anilist_id, title_query, "1", AsyncSessionLocal)
+                
+                stmt_retry = select(EpisodeCache).where(EpisodeCache.anilist_id == anilist_id)
+                res_retry = await db_session.execute(stmt_retry)
+                episodes = list(res_retry.scalars().all())
+
             # Parse episodes using custom float sort safely
             from app.handlers.search import parse_ep_num
             try:
