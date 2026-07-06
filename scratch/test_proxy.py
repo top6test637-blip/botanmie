@@ -7,16 +7,10 @@ async def test():
     connector = ProxyConnector.from_url(proxy)
     try:
         async with aiohttp.ClientSession(connector=connector) as session:
-            async with session.get("https://graphql.anilist.co", timeout=10) as resp:
-                print("Anilist status:", resp.status)
+            async with session.get("https://httpbin.org/ip", timeout=5) as resp:
+                print("Status:", resp.status)
+                print("JSON:", await resp.json())
     except Exception as e:
-        print("Anilist failed:", e)
-
-    try:
-        async with aiohttp.ClientSession(connector=connector) as session:
-            async with session.get("https://witanime.pics/", timeout=10) as resp:
-                print("Witanime status:", resp.status)
-    except Exception as e:
-        print("Witanime failed:", e)
+        print("Failed:", e)
 
 asyncio.run(test())

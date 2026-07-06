@@ -27,10 +27,36 @@ from playwright.async_api import async_playwright
 
 async def get_html_headless(url: str) -> str:
     try:
+        from app.utils.user_agents import get_random_user_agent
+        user_agent = get_random_user_agent()
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True, args=['--disable-blink-features=AutomationControlled'])
-            page = await browser.new_page()
-            await page.goto(url, wait_until='domcontentloaded', timeout=30000)
+            browser = await p.chromium.launch(
+                headless=True,
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-infobars',
+                    '--disable-dev-shm-usage',
+                ]
+            )
+            context = await browser.new_context(
+                user_agent=user_agent,
+                viewport={'width': 1280, 'height': 720},
+                device_scale_factor=1,
+                is_mobile=False,
+                has_touch=False,
+                locale="en-US,en;q=0.9"
+            )
+            page = await context.new_page()
+            # Remove navigator.webdriver property to bypass basic Cloudflare checks
+            await page.add_init_script("delete navigator.__proto__.webdriver;")
+            
+            # Go to URL and wait for DOM Content Loaded
+            await page.goto(url, wait_until='domcontentloaded', timeout=25000)
+            # Sleep 3 seconds to let any Javascript redirection or Cloudflare page solve
+            await page.wait_for_timeout(3000)
+            
             html = await page.content()
             await browser.close()
             return html
