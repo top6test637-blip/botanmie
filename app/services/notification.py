@@ -52,28 +52,23 @@ async def broadcast_new_episode_notification(
             f"📅 <b>تاريخ الإضافة:</b> {today_str}\n\n"
             f"👇 <b>للمشاهدة والتحميل المباشر عبر البوت:</b>"
         )
-        
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🎥 مشاهدة الآن", url=deeplink_url)],
             [InlineKeyboardButton(text="📢 قناة البوت الرسمية", url=chan_url)]
         ])
         
-        if image_url and image_url.startswith("http"):
-            photo = URLInputFile(image_url)
-            await bot.send_photo(
-                chat_id=chat_id,
-                photo=photo,
-                caption=caption_text,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
-        else:
-            await bot.send_message(
-                chat_id=chat_id,
-                text=caption_text,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
+        # Fallback to a high-quality default anime poster if no image is available
+        DEFAULT_POSTER_URL = "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop"
+        final_image = image_url if (image_url and image_url.startswith("http")) else DEFAULT_POSTER_URL
+        
+        photo = URLInputFile(final_image)
+        await bot.send_photo(
+            chat_id=chat_id,
+            photo=photo,
+            caption=caption_text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
             
         logger.info(f"Successfully sent 100% Arabic episode notification for {anime_title} Ep {episode_num}")
         return True
