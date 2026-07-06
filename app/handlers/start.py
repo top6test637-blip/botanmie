@@ -137,6 +137,35 @@ async def cmd_start(message: Message, db_session: AsyncSession, state: FSMContex
     args = message.text.split()
     if len(args) > 1:
         deep_link = args[1]
+        
+        # 1. Base64 Deeplink payload handling (e.g. start=pD4ip1zI or start=ep_...)
+        from app.utils.deeplink import decode_deeplink_payload
+        decoded = decode_deeplink_payload(deep_link)
+        if decoded:
+            try:
+                anilist_id = decoded["anilist_id"]
+                ep_number = decoded["ep_number"]
+                quality = decoded.get("quality", "720p")
+                
+                status_msg = await message.answer("⚡ جاري استرجاع الحلقة وتجهيزها...")
+                
+                from app.services.worker import enqueue_persistent_download_task
+                await enqueue_persistent_download_task(
+                    db_session_factory=lambda: db_session,
+                    bot=message.bot,
+                    user_id=message.from_user.id,
+                    chat_id=message.chat.id,
+                    message_id=status_msg.message_id,
+                    anilist_id=anilist_id,
+                    anime_title=f"الأنمي رقم #{anilist_id}",
+                    episode_num=ep_number,
+                    quality=quality
+                )
+                return
+            except Exception as de_err:
+                logger.exception(f"Error handling deeplink payload {deep_link}: {de_err}")
+
+        # 2. Traditional dl_ cache_id handling
         if deep_link.startswith("dl_"):
             try:
                 cache_id = int(deep_link.split("_")[1])
@@ -192,10 +221,10 @@ async def cmd_start(message: Message, db_session: AsyncSession, state: FSMContex
                         pass
                         
                     await message.answer(
-                        f"🎬 **الأنمي**: {anime_title}\n\n"
+                        f"🎬 <b>الأنمي</b>: {anime_title}\n\n"
                         f"اختر جودة التحميل المفضلة أدناه:",
                         reply_markup=markup,
-                        parse_mode="Markdown"
+                        parse_mode="HTML"
                     )
                     return
                 else:
@@ -348,9 +377,12 @@ async def handle_menu_favorites(callback: CallbackQuery, db_session: AsyncSessio
         await callback.message.answer(text, reply_markup=markup, parse_mode="HTML")
 
 @router.callback_query(F.data == "menu_support")
-async def handle_menu_support(callback: CallbackQuery):
+async def handle_menu_support(callback: CallbackQuery, db_session: AsyncSession):
     await safe_answer(callback)
-    support_text = (
+    from app.utils.settings import get_setting
+    custom_text = await get_setting("custom_msg_support", None)
+    
+    support_text = custom_text or (
         "🛠️ <b>الدعم الفني والتواصل:</b>\n\n"
         "إذا واجهتك أي مشكلة في استخدام البوت أو استخراج الروابط، يرجى التواصل معنا عبر المعرف التالي:\n"
         "👉 @botanmie_support\n\n"
@@ -364,9 +396,12 @@ async def handle_menu_support(callback: CallbackQuery):
         await callback.message.answer(support_text, reply_markup=markup, parse_mode="HTML")
 
 @router.callback_query(F.data == "menu_help")
-async def handle_menu_help(callback: CallbackQuery):
+async def handle_menu_help(callback: CallbackQuery, db_session: AsyncSession):
     await safe_answer(callback)
-    help_text = (
+    from app.utils.settings import get_setting
+    custom_text = await get_setting("custom_msg_help", None)
+    
+    help_text = custom_text or (
         "ℹ️ <b>دليل وتعليمات استخدام البوت كعضو:</b>\n\n"
         "🤖 <b>الأوامر المتاحة لك:</b>\n"
         "• <code>/start</code> - لتشغيل البوت وفتح لوحة التحكم الترحيبية.\n"
@@ -389,9 +424,12 @@ async def handle_menu_help(callback: CallbackQuery):
         await callback.message.answer(help_text, reply_markup=markup, parse_mode="HTML")
 
 @router.callback_query(F.data == "menu_ads")
-async def handle_menu_ads(callback: CallbackQuery):
+async def handle_menu_ads(callback: CallbackQuery, db_session: AsyncSession):
     await safe_answer(callback)
-    ads_text = (
+    from app.utils.settings import get_setting
+    custom_text = await get_setting("custom_msg_ads", None)
+    
+    ads_text = custom_text or (
         "📢 <b>للإعلانات والتمويل والتبرع:</b>\n\n"
         "لدعم استمرار خوادم البوت وتطويره، أو لطلب مساحات إعلانية داخل البوت والقناة، يرجى التواصل مع الإدارة:\n"
         "👉 @botanmie_admin\n\n"
@@ -467,6 +505,17 @@ async def handle_custom_btn_click(callback: CallbackQuery, db_session: AsyncSess
     db_session.add(btn)
     await db_session.commit()
     
+    if btn.response_text:
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=f"🔍 استكشاف أنميات {btn.text}", callback_data=f"suggest_search:{btn.text}")],
+            [InlineKeyboardButton(text="🏠 العودة للرئيسية", callback_data="check_sub")]
+        ])
+        try:
+            await callback.message.edit_text(btn.response_text, reply_markup=markup, parse_mode="HTML")
+        except Exception:
+            await callback.message.answer(btn.response_text, reply_markup=markup, parse_mode="HTML")
+        return
+        
     # Trigger handle_anime_search
     from app.handlers.search import handle_anime_search
     fake_msg = Message(
