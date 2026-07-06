@@ -152,28 +152,33 @@ async def _process_single_task_wrapper(
     bot: Bot,
     db_session_factory
 ):
+    success = False
+    try:
+        success = await asyncio.wait_for(
+            execute_queued_task(
+                task_id, user_id, chat_id, message_id, anilist_id, anime_title, episode_num, quality, bot, db_session_factory
+            ),
+            timeout=600  # 10 minutes max
+        )
+    except asyncio.TimeoutError:
+        logger.error(f"Task {task_id} timed out after 600 seconds")
+        success = False
+    except (asyncio.CancelledError, Exception) as e:
+        logger.exception(f"Error or cancellation processing task ID {task_id}: {e}")
+        success = False
+    finally:
         try:
-            success = await asyncio.wait_for(
-                execute_queued_task(
-                    task_id, user_id, chat_id, message_id, anilist_id, anime_title, episode_num, quality, bot, db_session_factory
-                ),
-                timeout=600  # 10 دقائق كحد أقصى
-            )
-        except asyncio.TimeoutError:
-            logger.error(f"Task {task_id} timed out after 600 seconds")
-            success = False
-        except Exception as e:
-            logger.exception(f"Error processing task ID {task_id}")
-            success = False
-
-        async with db_session_factory() as session:
-            stmt = select(PersistentTaskQueue).where(PersistentTaskQueue.id == task_id)
-            res = await session.execute(stmt)
-            db_task = res.scalar_one_or_none()
-            if db_task:
-                db_task.status = "completed" if success else "failed"
-                db_task.updated_at = datetime.now(timezone.utc)
-                await session.commit()
+            async with db_session_factory() as session:
+                stmt = select(PersistentTaskQueue).where(PersistentTaskQueue.id == task_id)
+                res = await session.execute(stmt)
+                db_task = res.scalar_one_or_none()
+                if db_task:
+                    db_task.status = "completed" if success else "failed"
+                    db_task.updated_at = datetime.now(timezone.utc)
+                    await session.commit()
+                    logger.info(f"Updated task {task_id} final status to '{db_task.status}'")
+        except Exception as final_err:
+            logger.error(f"Failed to update final status for task {task_id}: {final_err}")
 
 async def task_consumer_worker(bot: Bot, db_session_factory):
     """Indefinite background consumer worker loop processing multi-user tasks concurrently."""
@@ -247,15 +252,21 @@ async def self_heal_episode_cache(
         # If no SearchCache entry, we can create a temporary mockup
         if not cache_entry:
             logger.info(f"Self-healing: No SearchCache entry found for anilist_id={anilist_id}. Creating temporary one.")
-            cache_entry = SearchCache(
-                query_text=anime_title.lower(),
-                anilist_id=anilist_id,
-                title_english=anime_title,
-                title_romaji=anime_title,
-                description="لا يوجد"
-            )
-            session.add(cache_entry)
-            await session.commit()
+            try:
+                cache_entry = SearchCache(
+                    query_text=anime_title.lower(),
+                    anilist_id=anilist_id,
+                    title_english=anime_title,
+                    title_romaji=anime_title,
+                    description="لا يوجد"
+                )
+                session.add(cache_entry)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                stmt_retry = select(SearchCache).where(SearchCache.anilist_id == anilist_id)
+                res_retry = await session.execute(stmt_retry)
+                cache_entry = res_retry.scalar_one_or_none()
             
         anime_slug = None
         if cache_entry.title_romaji and cache_entry.title_romaji.startswith("WITANIME:"):

@@ -95,18 +95,21 @@ async def handle_anime_search(message: Message, db_session: AsyncSession, state:
             # Cache all resolved results (up to 10)
             logger.info(f"كاش جديد للبحث '{query}' يحتوي على {len(resolved_anime)} نتائج.")
             for anime in resolved_anime[:10]:
-                new_cache = SearchCache(
-                    query_text=query,
-                    anilist_id=anime["anilist_id"],
-                    title_english=anime["title_english"],
-                    title_romaji=anime["title_romaji"],
-                    description=anime["description"],
-                    image_url=anime["image_url"],
-                    duration=anime.get("duration")[:90] if anime.get("duration") else None,
-                    synonyms=anime.get("synonyms")
-                )
-                db_session.add(new_cache)
-            await db_session.commit()
+                try:
+                    new_cache = SearchCache(
+                        query_text=query,
+                        anilist_id=anime["anilist_id"],
+                        title_english=anime["title_english"],
+                        title_romaji=anime["title_romaji"],
+                        description=anime["description"],
+                        image_url=anime["image_url"],
+                        duration=anime.get("duration")[:90] if anime.get("duration") else None,
+                        synonyms=anime.get("synonyms")
+                    )
+                    db_session.add(new_cache)
+                    await db_session.commit()
+                except Exception:
+                    await db_session.rollback()
             
         except Exception as e:
             logger.exception("خطأ أثناء معالجة البحث وتطبيع الاستعلام")

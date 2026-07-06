@@ -242,23 +242,34 @@ async def prompt_quality_selection(
                     pass
             return False
             
-        qualities = scraped_links
-        if cached_dl:
-            cached_dl.qualities = qualities
-            cached_dl.duration = duration
-            cached_dl.created_at = datetime.now(timezone.utc)
-            db_session.add(cached_dl)
-            await db_session.commit()
-            db_cache_id = cached_dl.id
-        else:
-            new_dl = DownloadCache(
-                play_url=play_url,
-                qualities=qualities,
-                duration=duration
-            )
-            db_session.add(new_dl)
-            await db_session.commit()
-            db_cache_id = new_dl.id
+        try:
+            if cached_dl:
+                cached_dl.qualities = qualities
+                cached_dl.duration = duration
+                cached_dl.created_at = datetime.now(timezone.utc)
+                db_session.add(cached_dl)
+                await db_session.commit()
+                db_cache_id = cached_dl.id
+            else:
+                new_dl = DownloadCache(
+                    play_url=play_url,
+                    qualities=qualities,
+                    duration=duration
+                )
+                db_session.add(new_dl)
+                await db_session.commit()
+                db_cache_id = new_dl.id
+        except Exception:
+            await db_session.rollback()
+            dl_stmt2 = select(DownloadCache).where(DownloadCache.play_url == play_url)
+            dl_res2 = await db_session.execute(dl_stmt2)
+            existing_dl = dl_res2.scalar_one_or_none()
+            if existing_dl:
+                existing_dl.qualities = qualities
+                existing_dl.duration = duration
+                db_session.add(existing_dl)
+                await db_session.commit()
+                db_cache_id = existing_dl.id
             
         # Only delete status_msg if we created a new message
         if status_msg_id != message_id:

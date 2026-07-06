@@ -10,15 +10,12 @@ from urllib.parse import quote, urljoin
 WITANIME_DOMAIN = "witanime.life"
 GOGOANIME_DOMAINS = [
     "gogoanime3.cc",
-    "gogoanime3.co",
     "gogoanime.bz",
-    "gogoanime.gg",
     "gogoanime.ar",
+    "gogoanime3.co",
+    "gogoanime.gg",
     "gogoanime.ru",
-    "gogoanime.ws",
-    "gogoanime.life",
-    "gogoanime.ma",
-    "gogoanime.tel"
+    "gogoanime.ws"
 ]
 from config import config
 from app.utils.user_agents import get_random_user_agent
