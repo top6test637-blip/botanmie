@@ -1561,7 +1561,7 @@ async def search_anime_gogoanime(title: str) -> List[Dict[str, Any]]:
         logger.info(f"Trying Gogoanime search on domain: {domain}")
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(search_url, headers=get_browser_headers(search_url), timeout=12) as resp:
+                async with session.get(search_url, headers=get_browser_headers(search_url), timeout=4) as resp:
                     if resp.status != 200:
                         logger.warning(f"Gogoanime domain {domain} returned HTTP {resp.status}")
                         continue
