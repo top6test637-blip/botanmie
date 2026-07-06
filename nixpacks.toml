@@ -3,9 +3,12 @@ PLAYWRIGHT_BROWSERS_PATH = "/app/playwright-browsers"
 
 [phases.setup]
 pkgs = [
-    "libgbm", "libxkbcommon", "libXcomposite", "libXdamage", "libXext", 
-    "libXfixes", "libXrandr", "libxcb", "expat", "pango", 
-    "cairo", "alsa-lib"
+    "glib", "nss", "nspr", "atk", "at-spi2-atk", "dbus", "cups", 
+    "libdrm", "gtk3", "libxkbcommon", "mesa", "alsa-lib", 
+    "expat", "pango", "cairo", "xorg.libX11", "xorg.libXcomposite", 
+    "xorg.libXdamage", "xorg.libXext", "xorg.libXfixes", "xorg.libXrandr", 
+    "xorg.libxcb", "xorg.libXcursor", "xorg.libXi", "xorg.libXtst", 
+    "xorg.libXrender", "xorg.libXScrnSaver"
 ]
 
 [phases.install]
