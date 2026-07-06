@@ -146,6 +146,7 @@ async def cmd_start(message: Message, db_session: AsyncSession, state: FSMContex
                 anilist_id = decoded["anilist_id"]
                 ep_number = decoded["ep_number"]
                 quality = decoded.get("quality", "720p")
+                anime_title = decoded.get("anime_title") or f"الأنمي رقم #{anilist_id}"
                 
                 status_msg = await message.answer("⚡ جاري استرجاع الحلقة وتجهيزها...")
                 
@@ -158,7 +159,7 @@ async def cmd_start(message: Message, db_session: AsyncSession, state: FSMContex
                     chat_id=message.chat.id,
                     message_id=status_msg.message_id,
                     anilist_id=anilist_id,
-                    anime_title=f"الأنمي رقم #{anilist_id}",
+                    anime_title=anime_title,
                     episode_num=ep_number,
                     quality=quality
                 )

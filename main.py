@@ -54,8 +54,34 @@ def safe_create_task(coro, name=None):
     task.add_done_callback(_on_done)
     return task
 
+def ensure_playwright_browsers():
+    """Runs playwright install chromium if the browser executable is missing."""
+    import subprocess
+    
+    # Force the writable directory for Playwright
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/app/playwright-browsers"
+    
+    def run_install():
+        try:
+            logger.info("Verifying Playwright browser installation on boot...")
+            cmd = [sys.executable, "-m", "playwright", "install", "chromium"]
+            logger.info(f"Running: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+            if result.returncode != 0:
+                logger.warning(f"Playwright install failed (code {result.returncode}): {result.stderr}")
+            else:
+                logger.info("Playwright browser verified/installed successfully.")
+        except Exception as e:
+            logger.warning(f"Error checking/installing Playwright: {e}")
+
+    # Run in thread executor to prevent blocking the async loop
+    asyncio.get_event_loop().run_in_executor(None, run_install)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 0.5. Verify Playwright installation in background
+    ensure_playwright_browsers()
+
     # 1. Validate configuration
     try:
         config.validate()

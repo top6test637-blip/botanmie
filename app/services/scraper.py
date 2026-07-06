@@ -1749,9 +1749,109 @@ async def resolve_anime_slug_scraper(
     logger.warning(f"Could not resolve any slug for romaji='{title_romaji}', english='{title_english}'")
     return None
 
+async def scrape_latest_episodes_gogoanime(limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    Fetches latest released episodes from Gogoanime recent-release or SubsPlease RSS.
+    Returns list of dicts: {'anime_title', 'episode_num', 'play_url', 'poster_url'}
+    """
+    logger.info("Scraping latest released episodes from Gogoanime/SubsPlease...")
+    results = []
+    
+    # 1. Try SubsPlease RSS first (No JS/Cloudflare fingerprinting)
+    try:
+        url = "https://subsplease.org/rss/?r=1080"
+        headers = {"User-Agent": get_random_user_agent()}
+        connector = get_connector()
+        async with aiohttp.ClientSession(connector=connector) as session:
+            async with session.get(url, headers=headers, timeout=10) as resp:
+                if resp.status == 200:
+                    html_text = await resp.text()
+                    soup = BeautifulSoup(html_text, "html.parser")
+                    items = soup.select("item")
+                    for item in items[:limit]:
+                        title_tag = item.select_one("title")
+                        link_tag = item.select_one("link")
+                        if not title_tag:
+                            continue
+                        
+                        raw_title = title_tag.text.strip()
+                        play_url = link_tag.text.strip() if link_tag else ""
+                        
+                        if raw_title.startswith("[SubsPlease]"):
+                            raw_title = raw_title.split("[SubsPlease]", 1)[1].strip()
+                            
+                        if " (01-" in raw_title or "[Batch]" in raw_title:
+                            continue
+                            
+                        match = re.match(r"^(.*?)\s*-\s*(\d+(?:\.\d+)?)\s*\(.*?\)", raw_title)
+                        if match:
+                            anime_name = match.group(1).strip()
+                            ep_num = match.group(2).strip()
+                            results.append({
+                                "anime_title": anime_name,
+                                "episode_num": ep_num,
+                                "play_url": play_url,
+                                "poster_url": None
+                            })
+                    if results:
+                        logger.info(f"Successfully fetched {len(results)} latest episodes from SubsPlease RSS")
+                        return results
+    except Exception as e:
+        logger.warning(f"Failed to scrape SubsPlease RSS: {e}")
+        
+    # 2. Fallback to Gogoanime homepage recent releases using Playwright
+    for domain in ["gogoanime3.cc", "gogoanime3.co"]:
+        try:
+            url = f"https://{domain}/"
+            logger.info(f"Trying Gogoanime homepage recent releases using Playwright on {domain}...")
+            html_text = await get_html_headless(url)
+            if html_text:
+                soup = BeautifulSoup(html_text, "html.parser")
+                items = soup.select("ul.items li")
+                for item in items[:limit]:
+                    name_tag = item.select_one("p.name a")
+                    ep_tag = item.select_one("p.episode")
+                    img_tag = item.select_one("div.img a img")
+                    
+                    if not name_tag:
+                        continue
+                        
+                    anime_name = name_tag.text.strip()
+                    play_url = f"https://{domain}{name_tag['href']}" if name_tag.get("href") else ""
+                    
+                    raw_ep = ep_tag.text.strip() if ep_tag else "1"
+                    ep_match = re.search(r"\d+", raw_ep)
+                    ep_num = ep_match.group(0) if ep_match else "1"
+                    
+                    poster_url = img_tag.get("src") or img_tag.get("data-src") if img_tag else None
+                    
+                    results.append({
+                        "anime_title": anime_name,
+                        "episode_num": ep_num,
+                        "play_url": play_url,
+                        "poster_url": poster_url
+                    })
+                if results:
+                    logger.info(f"Successfully fetched {len(results)} latest episodes from Gogoanime homepage")
+                    return results
+        except Exception as e:
+            logger.warning(f"Error scraping Gogoanime homepage from {domain}: {e}")
+            
+    return []
+
 async def fetch_latest_site_episodes() -> List[Dict[str, Any]]:
-    """Scrapes recently uploaded episodes from WitAnime homepage / latest episodes page."""
-    logger.info("Scraping latest released episodes from site...")
+    """Scrapes recently uploaded episodes trying Gogoanime/SubsPlease first, then WitAnime if it fails."""
+    # 1. Try Gogoanime / SubsPlease first
+    try:
+        logger.info("Attempting to fetch latest releases from Gogoanime/SubsPlease first...")
+        results = await scrape_latest_episodes_gogoanime()
+        if results:
+            return results
+    except Exception as gogo_err:
+        logger.warning(f"Gogoanime/SubsPlease primary release scrape failed: {gogo_err}")
+
+    # 2. Fallback to WitAnime
+    logger.info("Gogoanime/SubsPlease failed or empty. Falling back to WitAnime latest release scrape...")
     headers = {"User-Agent": get_random_user_agent()}
     
     # Try all domains in WITANIME_DOMAINS list

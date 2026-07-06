@@ -36,7 +36,7 @@ async def broadcast_new_episode_notification(
         bot_info = await bot.get_me()
         bot_username = bot_info.username if bot_info else "anime_wrbot"
         
-        payload = encode_deeplink_payload(anilist_id, episode_num)
+        payload = encode_deeplink_payload(anilist_id, episode_num, anime_title=anime_title)
         deeplink_url = f"https://t.me/{bot_username}?start={payload}"
         
         chans = [c.strip() for c in (config.CHANNEL_USERNAME or "").replace(",", " ").split() if c.strip()]
@@ -84,6 +84,10 @@ async def broadcast_new_episode_notification(
 
 async def start_latest_episodes_notifier_loop(bot: Bot, db_session_factory):
     """Background loop that periodically checks the site for newly released episodes and sends automatic alerts."""
+    if not getattr(config, "ENABLE_LATEST_NOTIFIER", True):
+        logger.info("Automatic latest episodes notifier is disabled via config settings.")
+        return
+
     logger.info("Starting automatic latest episodes notifier background loop...")
     
     while True:

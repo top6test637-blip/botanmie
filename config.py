@@ -18,6 +18,9 @@ class Config:
     SUPER_ADMIN_ID = int(os.getenv("SUPER_ADMIN_ID", "0").strip())
     CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME", "").strip() or None
     
+    # Latest Release Notifier Toggle
+    ENABLE_LATEST_NOTIFIER = os.getenv("ENABLE_LATEST_NOTIFIER", "True").strip().lower() in ("true", "1", "yes", "on")
+
     # Parse MOCK_MODE boolean
     mock_mode_str = os.getenv("MOCK_MODE", "True").strip().lower()
     MOCK_MODE = mock_mode_str in ("true", "1", "yes", "on")

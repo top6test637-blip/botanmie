@@ -1382,3 +1382,30 @@ Traceback (most recent call last):
                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 socket.gaierror: [Errno 11001] getaddrinfo failed
 [2026-07-06 21:28:04] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-07 01:29:40] [INFO] [bot] [logging_config.py:47]: Centralized logging system initialized.
+[2026-07-07 01:29:40] [INFO] [bot] [scraper.py:1846]: Attempting to fetch latest releases from Gogoanime/SubsPlease first...
+[2026-07-07 01:29:40] [INFO] [bot] [scraper.py:1757]: Scraping latest released episodes from Gogoanime/SubsPlease...
+[2026-07-07 01:29:41] [WARNING] [bot] [scraper.py:1800]: Failed to scrape SubsPlease RSS: Username and password authentication failure
+[2026-07-07 01:29:41] [INFO] [bot] [scraper.py:1806]: Trying Gogoanime homepage recent releases using Playwright on gogoanime3.cc...
+[2026-07-07 01:29:44] [WARNING] [bot] [scraper.py:38]: Playwright headless fetch failed for https://gogoanime3.cc/: BrowserType.launch: Executable doesn't exist at \app\playwright-browsers\chromium_headless_shell-1228\chrome-headless-shell-win64\chrome-headless-shell.exe
+╔════════════════════════════════════════════════════════════╗
+║ Looks like Playwright was just installed or updated.       ║
+║ Please run the following command to download new browsers: ║
+║                                                            ║
+║     playwright install                                     ║
+║                                                            ║
+║ <3 Playwright Team                                         ║
+╚════════════════════════════════════════════════════════════╝
+[2026-07-07 01:29:44] [INFO] [bot] [scraper.py:1806]: Trying Gogoanime homepage recent releases using Playwright on gogoanime3.co...
+[2026-07-07 01:29:44] [WARNING] [bot] [scraper.py:38]: Playwright headless fetch failed for https://gogoanime3.co/: BrowserType.launch: Executable doesn't exist at \app\playwright-browsers\chromium_headless_shell-1228\chrome-headless-shell-win64\chrome-headless-shell.exe
+╔════════════════════════════════════════════════════════════╗
+║ Looks like Playwright was just installed or updated.       ║
+║ Please run the following command to download new browsers: ║
+║                                                            ║
+║     playwright install                                     ║
+║                                                            ║
+║ <3 Playwright Team                                         ║
+╚════════════════════════════════════════════════════════════╝
+[2026-07-07 01:29:44] [INFO] [bot] [scraper.py:1854]: Gogoanime/SubsPlease failed or empty. Falling back to WitAnime latest release scrape...
+[2026-07-07 01:29:45] [WARNING] [bot] [scraper.py:1916]: Error fetching latest site episodes from witanime.pics: Failed to perform, curl: (97) User was rejected by the SOCKS5 server (1 1).. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
+[2026-07-07 01:29:45] [WARNING] [bot] [scraper.py:1916]: Error fetching latest site episodes from witanime.life: Failed to perform, curl: (97) User was rejected by the SOCKS5 server (1 1).. See https://curl.se/libcurl/c/libcurl-errors.html first for more details.
