@@ -124,6 +124,34 @@ async def save_telegram_file_cache(db_session_factory, anilist_id: int, ep_numbe
     except Exception as e:
         logger.exception(f"Error saving to TelegramFileCache: {e}")
 
+async def enqueue_persistent_download_task(
+    db_session_factory,
+    bot: Bot,
+    user_id: int,
+    chat_id: int,
+    message_id: Optional[int],
+    anilist_id: int,
+    anime_title: str,
+    episode_num: str,
+    quality: str = "720p"
+) -> PersistentTaskQueue:
+    """Enqueues a new download task into PersistentTaskQueue."""
+    async with db_session_factory() as session:
+        new_task = PersistentTaskQueue(
+            user_id=user_id,
+            chat_id=chat_id,
+            message_id=message_id,
+            anilist_id=anilist_id,
+            anime_title=anime_title,
+            episode_num=episode_num,
+            quality=quality,
+            status="pending"
+        )
+        session.add(new_task)
+        await session.commit()
+        logger.info(f"Enqueued persistent download task {new_task.id} for User {user_id}: {anime_title} Ep {episode_num}")
+        return new_task
+
 async def recover_stuck_tasks(db_session_factory):
     """Resets any 'processing' tasks back to 'pending' on startup."""
     try:
@@ -486,9 +514,12 @@ async def execute_queued_task(
             return False
         # Save to DB cache
         async with db_session_factory() as session:
-            new_dl = DownloadCache(play_url=play_url, qualities=qualities, duration=duration_str)
-            session.add(new_dl)
-            await session.commit()
+            try:
+                new_dl = DownloadCache(play_url=play_url, qualities=qualities, duration=duration_str)
+                session.add(new_dl)
+                await session.commit()
+            except Exception:
+                await session.rollback()
 
     # 3. Check for cached Telegram file ID (Zero-second Delivery)
     selected_quality, download_url, size = await select_best_quality(qualities, requested_quality)

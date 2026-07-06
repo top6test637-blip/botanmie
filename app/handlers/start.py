@@ -150,8 +150,9 @@ async def cmd_start(message: Message, db_session: AsyncSession, state: FSMContex
                 status_msg = await message.answer("⚡ جاري استرجاع الحلقة وتجهيزها...")
                 
                 from app.services.worker import enqueue_persistent_download_task
+                from app.database.connection import AsyncSessionLocal
                 await enqueue_persistent_download_task(
-                    db_session_factory=lambda: db_session,
+                    db_session_factory=AsyncSessionLocal,
                     bot=message.bot,
                     user_id=message.from_user.id,
                     chat_id=message.chat.id,
