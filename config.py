@@ -7,7 +7,7 @@ env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 # Enforce a fixed writeable directory for Playwright browser binaries
-os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/app/.cache/ms-playwright"
+os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "/app/playwright-browsers"
 
 
 class Config:

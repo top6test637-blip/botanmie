@@ -1,5 +1,5 @@
 [variables]
-PLAYWRIGHT_BROWSERS_PATH = "/app/.cache/ms-playwright"
+PLAYWRIGHT_BROWSERS_PATH = "/app/playwright-browsers"
 
 [phases.setup]
 pkgs = [
@@ -11,5 +11,5 @@ pkgs = [
 [phases.install]
 cmds = [
     "pip install -r requirements.txt",
-    "PLAYWRIGHT_BROWSERS_PATH=/app/.cache/ms-playwright playwright install --with-deps chromium"
+    "PLAYWRIGHT_BROWSERS_PATH=/app/playwright-browsers playwright install --with-deps chromium"
 ]
