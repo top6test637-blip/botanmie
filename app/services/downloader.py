@@ -230,9 +230,10 @@ async def download_segment(
     session: aiohttp.ClientSession,
     headers: dict,
     is_png_wrapped: bool,
-    semaphore: asyncio.Semaphore
-) -> Tuple[int, Optional[bytes]]:
-    """Downloads a single segment chunk, checking and stripping fake PNG signature with retry mechanism."""
+    semaphore: asyncio.Semaphore,
+    temp_dir: Path
+) -> Tuple[int, bool]:
+    """Downloads a single segment chunk, stripping fake PNG signature, and writes it directly to disk to minimize RAM usage."""
     max_retries = 5
     seg_timeout = aiohttp.ClientTimeout(total=120, sock_read=60)
     
@@ -255,7 +256,11 @@ async def download_segment(
                         seg_data = await resp.read()
                         if is_png_wrapped and seg_data.startswith(b"\x89PNG"):
                             seg_data = seg_data[252:]
-                        return idx, seg_data
+                        
+                        seg_file_path = temp_dir / f"seg_{idx}.ts"
+                        loop = asyncio.get_running_loop()
+                        await loop.run_in_executor(None, lambda: seg_file_path.write_bytes(seg_data))
+                        return idx, True
                     elif resp.status == 502:
                         logger.warning(f"[Attempt {attempt+1}/{max_retries}] Segment {idx} 502 error")
                     else:
@@ -265,7 +270,7 @@ async def download_segment(
             if attempt < max_retries - 1:
                 backoff = min(2 * (2 ** attempt), 16)
                 await asyncio.sleep(backoff)
-        return idx, None
+        return idx, False
 
 async def download_hls(
     m3u8_url: str,
@@ -274,8 +279,8 @@ async def download_hls(
     quality: str
 ) -> bool:
     """
-    Downloads HLS playlist concurrently using asyncio.gather (up to 20 parallel connections),
-    stripping fake PNG headers, and merging segments. Reuses ClientSession with large connection pooling.
+    Downloads HLS playlist concurrently using disk-buffered segment storage to maintain near-zero RAM footprint.
+    Reuses ClientSession with large connection pooling.
     """
     connector = get_session_connector(limit=0)
     referer = get_referer_for_url(m3u8_url)
@@ -289,6 +294,10 @@ async def download_hls(
     
     if config.PROXY_URL:
         logger.info(f"Proxy used for request: {config.PROXY_URL}")
+        
+    unique_id = uuid.uuid4().hex[:8]
+    temp_dir = config.DOWNLOAD_DIR / f"hls_temp_{unique_id}"
+    temp_dir.mkdir(parents=True, exist_ok=True)
         
     try:
         async with aiohttp.ClientSession(connector=connector, headers=keep_alive_headers) as session:
@@ -315,7 +324,7 @@ async def download_hls(
                 return False
                 
             total_segments = len(segment_urls)
-            logger.info(f"Starting HLS parallel download for {total_segments} segments.")
+            logger.info(f"Starting HLS parallel download for {total_segments} segments (disk-buffered).")
             
             # Check first segment wrapper signature
             first_seg_url = segment_urls[0]
@@ -335,16 +344,12 @@ async def download_hls(
             except Exception:
                 logger.exception("Error checking segment wrapping headers")
                 
-            actual_seg_size = first_seg_size - 252 if is_png_wrapped else first_seg_size
-            estimated_total_size = total_segments * actual_seg_size
-            
-            # Spawn parallel download tasks with progress tracking (64 worker pool for 100MB/s)
             semaphore = asyncio.Semaphore(MAX_CONCURRENT_SEGMENTS)
             completed_segments = 0
             
             async def download_segment_with_progress(idx, seg_url, is_png_wrapped, sem):
                 nonlocal completed_segments
-                res = await download_segment(idx, seg_url, session, headers, is_png_wrapped, sem)
+                res = await download_segment(idx, seg_url, session, headers, is_png_wrapped, sem, temp_dir)
                 completed_segments += 1
                 return res
 
@@ -353,7 +358,6 @@ async def download_hls(
                 for idx, seg_url in enumerate(segment_urls)
             ]
             
-            # Start a background task to update progress every 4 seconds
             stop_updater = False
             async def progress_updater():
                 nonlocal completed_segments, stop_updater
@@ -388,22 +392,39 @@ async def download_hls(
                 
             elapsed = time.time() - start_time
             
+            failed_segments = [idx for idx, success in results if not success]
+            if failed_segments:
+                logger.error(f"Error in process: failed to download HLS segments: {failed_segments}")
+                return False
+                
             downloaded_bytes = 0
             completed_segments_count = 0
             
-            # Open output file with 1MB buffer size to reduce disk write latency
-            with open(target_path, "wb", buffering=1024*1024) as outfile:
-                for idx, seg_data in sorted(results, key=lambda x: x[0]):
-                    if seg_data is None:
-                        logger.error(f"Error in process: failed to download segment {idx+1}")
-                        return False
-                    outfile.write(seg_data)
-                    downloaded_bytes += len(seg_data)
-                    completed_segments_count += 1
+            logger.info(f"Merging {total_segments} HLS segments from disk...")
+            
+            def merge_files():
+                nonlocal downloaded_bytes, completed_segments_count
+                with open(target_path, "wb", buffering=1024*1024) as outfile:
+                    for idx in range(total_segments):
+                        seg_file = temp_dir / f"seg_{idx}.ts"
+                        if not seg_file.exists():
+                            raise FileNotFoundError(f"Segment file seg_{idx}.ts is missing.")
+                        with open(seg_file, "rb") as infile:
+                            data = infile.read()
+                            outfile.write(data)
+                            downloaded_bytes += len(data)
+                            completed_segments_count += 1
+            
+            try:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, merge_files)
+            except Exception as merge_err:
+                logger.error(f"Failed to merge HLS segments: {merge_err}")
+                return False
             
             speed = downloaded_bytes / elapsed if elapsed > 0 else 0
             speed_mb = speed / (1024 * 1024)
-            logger.info(f"تم التحميل بنجاح في {elapsed:.1f} ثانية. السرعة الإجمالية: {speed_mb:.2f} ميجابايت/ثانية")
+            logger.info(f"تم التحميل والدمج بنجاح في {elapsed:.1f} ثانية. السرعة الإجمالية: {speed_mb:.2f} ميجابايت/ثانية")
             
             try:
                 await status_message.edit_text(f"✅ تم تحميل البث بنجاح!\nالسرعة: `{speed_mb:.2f} ميجابايت/ثانية`")
@@ -413,6 +434,13 @@ async def download_hls(
     except Exception:
         logger.exception("Error in process during parallel HLS download")
         return False
+    finally:
+        import shutil
+        if temp_dir.exists():
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception as clean_err:
+                logger.warning(f"Failed to clean up temp HLS directory: {clean_err}")
 
 async def download_multipart(
     url: str,
