@@ -225,6 +225,8 @@ async def prompt_quality_selection(
                 message_id=status_msg_id
             )
             return False
+            
+        qualities = scraped_links
         
         if not scraped_links:
             logger.error(f"DIAGNOSTIC: Failed to resolve qualities for {play_url}. Deep scan returned empty.")

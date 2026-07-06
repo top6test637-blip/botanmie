@@ -810,9 +810,7 @@ async def process_and_send_video(
                 raise Exception(f"فشل ضغط الملف الذي يتجاوز 2 جيجابايت: {compression_err}")
 
         await status_msg.edit_text("📤 جاري رفع الفيديو إلى تلغرام...")
-        with open(temp_file_path, "rb") as vf:
-            video_bytes = vf.read()
-        video_file = BufferedInputFile(video_bytes, filename=filename)
+        video_file = FSInputFile(str(temp_file_path))
         
         # Resolve anime title and episode number
         anime_title = "أنمي"

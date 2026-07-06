@@ -73,12 +73,11 @@ async def get_thumbnail_input(bot: Bot) -> Optional[BufferedInputFile]:
         
     try:
         logger.info(f"Downloading custom thumbnail file from Telegram file_id: {file_id}")
-        async with Bot(token=bot.token) as cloud_bot:
-            file_info = await cloud_bot.get_file(file_id)
-            if file_info and file_info.file_path:
-                logger.info(f"Downloading custom thumbnail from Telegram Cloud path: {file_info.file_path}")
-                os.makedirs(os.path.dirname(raw_path), exist_ok=True)
-                await cloud_bot.download_file(file_info.file_path, destination=str(raw_path))
+        file_info = await bot.get_file(file_id)
+        if file_info and file_info.file_path:
+            logger.info(f"Downloading custom thumbnail from Telegram path: {file_info.file_path}")
+            os.makedirs(os.path.dirname(raw_path), exist_ok=True)
+            await bot.download_file(file_info.file_path, destination=str(raw_path))
             
             if raw_path.exists() and raw_path.stat().st_size > 0:
                 success = prepare_telegram_thumbnail(raw_path, optimized_path)
@@ -472,6 +471,7 @@ async def execute_queued_task(
     db_session_factory
 ) -> bool:
     """Executes HLS segment downloading, compression, delivery, and forum mirroring."""
+    temp_file_path = None
     logger.info(f"Executing task {task_id}: {anime_title} ep {episode_num} [{requested_quality}]")
     
     # 0. Check TelegramFileCache for instant Zero-second delivery across server crashes/restarts
@@ -879,7 +879,7 @@ async def execute_queued_task(
             except Exception: pass
         return False
     finally:
-        if temp_file_path.exists():
+        if temp_file_path and temp_file_path.exists():
             try: os.unlink(temp_file_path)
             except Exception: pass
 
