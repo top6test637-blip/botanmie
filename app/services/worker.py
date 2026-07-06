@@ -318,7 +318,7 @@ async def task_consumer_worker(bot: Bot, db_session_factory):
                         await session.commit()
                         
                         worker_task = asyncio.create_task(
-                            _process_single_task_wrapper(
+                            process_task_with_timeout(
                                 t_id, u_id, c_id, m_id, a_id, a_title, ep_num, q_val, bot, db_session_factory
                             )
                         )
