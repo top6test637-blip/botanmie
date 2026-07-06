@@ -94,9 +94,35 @@ async def start_latest_episodes_notifier_loop(bot: Bot, db_session_factory):
             if latest_episodes:
                 raw_history = await get_setting("notified_episodes_history", None)
                 
-                # First run initialization: seed history with current site episodes to avoid notification spam on startup
+                # First run initialization: seed history with current site episodes and post the latest 5 as a test
                 if raw_history is None:
                     initial_keys = [f"{ep['anime_title']}:{ep['episode_num']}" for ep in latest_episodes]
+                    
+                    # Post the latest 5 episodes on first startup (index 0 is newest, index 4 is fifth newest)
+                    startup_demo_eps = latest_episodes[:5]
+                    logger.info(f"First run: Broadcasting notifications for the newest 5 episodes (out of {len(latest_episodes)}) as a startup test.")
+                    
+                    for ep in reversed(startup_demo_eps):
+                        anilist_id = 0
+                        image_url = ep.get("poster_url")
+                        try:
+                            from app.services.anilist import search_anime_anilist
+                            res = await search_anime_anilist(ep['anime_title'])
+                            if res:
+                                anilist_id = res[0]['anilist_id']
+                                image_url = res[0].get('image_url') or image_url
+                        except Exception:
+                            pass
+                            
+                        await broadcast_new_episode_notification(
+                            bot=bot,
+                            anilist_id=anilist_id,
+                            anime_title=ep['anime_title'],
+                            episode_num=ep['episode_num'],
+                            image_url=image_url
+                        )
+                        await asyncio.sleep(2)
+                        
                     await set_setting("notified_episodes_history", json.dumps(initial_keys))
                     logger.info(f"Seeded notification history with {len(initial_keys)} existing site episodes.")
                 else:

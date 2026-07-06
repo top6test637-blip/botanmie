@@ -1759,6 +1759,7 @@ async def fetch_latest_site_episodes() -> List[Dict[str, Any]]:
         url = f"https://{domain}/latest-episodes/"
         results = []
         try:
+            html_text = ""
             if CURL_CFFI_AVAILABLE and CurlAsyncSession:
                 proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
                 async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
@@ -1771,7 +1772,11 @@ async def fetch_latest_site_episodes() -> List[Dict[str, Any]]:
                         html_text = await resp.text() if resp.status == 200 else ""
                             
             if not html_text or "403 Forbidden" in html_text or "Cloudflare" in html_text:
-                logger.warning(f"Domain {domain} returned 403 Forbidden or empty for latest release scrape. Trying next...")
+                logger.warning(f"Domain {domain} returned 403 Forbidden or Cloudflare page for direct latest release scrape. Trying Playwright fallback...")
+                html_text = await get_html_headless(url)
+                
+            if not html_text or "403 Forbidden" in html_text or "Cloudflare" in html_text:
+                logger.warning(f"Domain {domain} failed latest release scrape even with Playwright. Trying next...")
                 continue
                 
             soup = BeautifulSoup(html_text, "html.parser")

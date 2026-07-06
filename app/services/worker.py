@@ -56,8 +56,47 @@ def prepare_telegram_thumbnail(raw_file_path: Path, target_jpg_path: Path) -> bo
             logger.warning(f"FFmpeg thumbnail fallback failed: {ff_e}")
     return False
 
-async def get_thumbnail_input(bot: Bot) -> Optional[BufferedInputFile]:
-    """Helper to retrieve, format, and prepare custom thumbnail from Telegram as active BufferedInputFile object."""
+async def get_video_metadata(video_path: Path) -> tuple[Optional[int], Optional[int], Optional[int]]:
+    """Returns (duration, width, height) of the video file using ffprobe."""
+    try:
+        import json
+        cmd = [
+            "ffprobe", "-v", "quiet", "-print_format", "json",
+            "-show_streams", "-show_format", str(video_path)
+        ]
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode == 0:
+            data = json.loads(stdout.decode('utf-8'))
+            duration = None
+            width = None
+            height = None
+            
+            if "format" in data and "duration" in data["format"]:
+                try: duration = int(float(data["format"]["duration"]))
+                except ValueError: pass
+                
+            for stream in data.get("streams", []):
+                if stream.get("codec_type") == "video":
+                    if "width" in stream:
+                        width = int(stream["width"])
+                    if "height" in stream:
+                        height = int(stream["height"])
+                    if not duration and "duration" in stream:
+                        try: duration = int(float(stream["duration"]))
+                        except ValueError: pass
+                    break
+            return duration, width, height
+    except Exception as e:
+        logger.warning(f"Failed to probe video metadata using ffprobe: {e}")
+    return None, None, None
+
+async def get_thumbnail_input(bot: Bot) -> Optional[FSInputFile]:
+    """Helper to retrieve, format, and prepare custom thumbnail from Telegram as active FSInputFile object."""
     from app.utils.settings import get_setting
     file_id = await get_setting("custom_thumb_file_id")
     if not file_id:
@@ -68,8 +107,7 @@ async def get_thumbnail_input(bot: Bot) -> Optional[BufferedInputFile]:
     optimized_path = config.DOWNLOAD_DIR / f"custom_thumb_320_{sanitized_id}.jpg"
     
     if optimized_path.exists() and optimized_path.stat().st_size > 0:
-        with open(optimized_path, "rb") as tf:
-            return BufferedInputFile(tf.read(), filename="thumb.jpg")
+        return FSInputFile(str(optimized_path))
         
     try:
         logger.info(f"Downloading/Retrieving custom thumbnail file from Telegram file_id: {file_id}")
@@ -107,8 +145,7 @@ async def get_thumbnail_input(bot: Bot) -> Optional[BufferedInputFile]:
             if raw_path.exists() and raw_path.stat().st_size > 0:
                 success = prepare_telegram_thumbnail(raw_path, optimized_path)
                 final_path = optimized_path if (success and optimized_path.exists()) else raw_path
-                with open(final_path, "rb") as tf:
-                    return BufferedInputFile(tf.read(), filename="thumb.jpg")
+                return FSInputFile(str(final_path))
     except Exception as e:
         logger.warning(f"Failed to download/process custom thumbnail from Telegram: {e}")
         
@@ -855,11 +892,17 @@ async def execute_queued_task(
         video_file = FSInputFile(str(temp_file_path))
         thumb_input = await get_video_thumbnail(bot, db_session_factory, anilist_id)
 
+        # Probe exact video metadata (duration, width, height) using ffprobe to force custom thumbnail display
+        probe_duration, video_width, video_height = await get_video_metadata(temp_file_path)
+        final_duration = probe_duration or parse_duration_to_seconds(duration_str)
+
         sent_msg = await bot.send_video(
             chat_id=chat_id,
             video=video_file,
             thumbnail=thumb_input,
-            duration=parse_duration_to_seconds(duration_str),
+            width=video_width,
+            height=video_height,
+            duration=final_duration,
             caption=caption,
             supports_streaming=True,
             reply_markup=nav_markup,
