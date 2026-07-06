@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Any, Optional
 from urllib.parse import quote, urljoin
 
-WITANIME_DOMAIN = "witanime.life"
+WITANIME_DOMAIN = "witanime.pics"
 GOGOANIME_DOMAINS = [
     "gogoanime3.cc",
     "gogoanime.bz",
@@ -170,7 +170,7 @@ def get_global_cookie_jar() -> aiohttp.CookieJar:
         GLOBAL_COOKIE_JAR = aiohttp.CookieJar()
     return GLOBAL_COOKIE_JAR
 
-WITANIME_DOMAINS = ["witanime.life"]
+WITANIME_DOMAINS = ["witanime.pics", "witanime.life"]
 
 def get_browser_headers(referer: str = f"https://{WITANIME_DOMAIN}/") -> dict:
     safe_referer = quote(referer, safe=":/?&=")
@@ -323,7 +323,7 @@ async def _run_scraper_search(session: Any, title: str, search_queries: List[str
                 html = await get_html(search_url, session)
                 if html == "STATUS_403_FORBIDDEN":
                     logger.warning(f"Domain {domain} returned 403 Forbidden. Aborting search due to Cloudflare block.")
-                    raise ScraperError("CLOUDFLARE_BLOCK: The helper streaming site (witanime.life) is protected by Cloudflare and returned 403 Forbidden.")
+                    raise ScraperError(f"CLOUDFLARE_BLOCK: The helper streaming site ({domain}) is protected by Cloudflare and returned 403 Forbidden.")
                 if not html:
                     continue
                 soup = BeautifulSoup(html, "html.parser")
@@ -666,7 +666,7 @@ async def _run_get_episodes(session: Any, anime_slug: str) -> Dict[str, Any]:
             try:
                 html = await get_html(url, session)
                 if html == "STATUS_403_FORBIDDEN":
-                    raise ScraperError("CLOUDFLARE_BLOCK: The helper streaming site (witanime.life) is protected by Cloudflare and returned 403 Forbidden.")
+                    raise ScraperError(f"CLOUDFLARE_BLOCK: The helper streaming site ({active_domain}) is protected by Cloudflare and returned 403 Forbidden.")
                 if not html:
                     logger.info(f"توقف جلب الصفحات عند الصفحة {page_num} بسبب محتوى فارغ")
                     break
@@ -1245,7 +1245,7 @@ async def _run_get_download_links(session: Any, play_url: str) -> Dict[str, str]
             
         # استبدل هذه القائمة
         
-        url_domains = ["witanime.life", "witanime.pics"]  # فقط النطاقات المعروفة بالعمل
+        url_domains = ["witanime.pics", "witanime.life"]  # فقط النطاقات المعروفة بالعمل
         
         # Extract current domain from play_url
         current_domain = None
@@ -1524,7 +1524,7 @@ async def try_fetch_anime_page_with_fallbacks(session: Any, anime_slug: str) -> 
     if stripped and stripped not in slug_variations:
         slug_variations.append(stripped)
         
-    domains_to_try = ["witanime.life", "witanime.pics"]
+    domains_to_try = ["witanime.pics", "witanime.life"]
     
     for slug in slug_variations:
         for domain in domains_to_try:
@@ -1541,7 +1541,7 @@ async def try_fetch_anime_page_with_fallbacks(session: Any, anime_slug: str) -> 
             except Exception as e:
                 logger.debug(f"Failed fallback fetch for {url}: {e}")
                 
-    return "", "witanime.life", anime_slug
+    return "", "witanime.pics", anime_slug
 
 # ======================== GOGOANIME SCRAPER ========================
 # ======================== GOGOANIME SCRAPER ========================
@@ -1747,56 +1747,61 @@ async def fetch_latest_site_episodes() -> List[Dict[str, Any]]:
     """Scrapes recently uploaded episodes from WitAnime homepage / latest episodes page."""
     logger.info("Scraping latest released episodes from site...")
     headers = {"User-Agent": get_random_user_agent()}
-    url = f"https://{WITANIME_DOMAIN}/latest-episodes/"
-    results = []
     
-    try:
-        if CURL_CFFI_AVAILABLE and CurlAsyncSession:
-            proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
-            async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
-                resp = await session.get(url, headers=headers, timeout=12)
-                html_text = resp.text if resp.status_code == 200 else ""
-        else:
-            connector = get_connector()
-            async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.get(url, headers=headers, timeout=12) as resp:
-                    html_text = await resp.text() if resp.status == 200 else ""
-                        
-        if not html_text:
-            return []
-            
-        soup = BeautifulSoup(html_text, "html.parser")
-        items = soup.select(".anime-card-container, .episodes-card-container, div.anime-card-post, div.epcontent div.epcard")
-        if not items:
-            items = soup.select("div.content div.anime-card-details")
-            
-        for item in items[:15]:
-            a_tag = item.select_one("a")
-            if not a_tag or not a_tag.get("href"):
-                continue
-            play_url = a_tag["href"]
-            title_tag = item.select_one(".anime-card-title, .epcard-title, h3, h2")
-            raw_title = title_tag.text.strip() if title_tag else a_tag.get("title", "")
-            
-            img_tag = item.select_one("img")
-            poster_url = img_tag.get("src") or img_tag.get("data-src") if img_tag else None
-            
-            if "الحلقة" in raw_title:
-                parts = raw_title.split("الحلقة")
-                anime_name = parts[0].strip(" -").strip()
-                ep_num = parts[1].strip(" -").strip()
+    # Try all domains in WITANIME_DOMAINS list
+    for domain in WITANIME_DOMAINS:
+        url = f"https://{domain}/latest-episodes/"
+        results = []
+        try:
+            if CURL_CFFI_AVAILABLE and CurlAsyncSession:
+                proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
+                async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
+                    resp = await session.get(url, headers=headers, timeout=12)
+                    html_text = resp.text if resp.status_code == 200 else ""
             else:
-                anime_name = raw_title
-                ep_num = "1"
+                connector = get_connector()
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    async with session.get(url, headers=headers, timeout=12) as resp:
+                        html_text = await resp.text() if resp.status == 200 else ""
+                            
+            if not html_text or "403 Forbidden" in html_text or "Cloudflare" in html_text:
+                logger.warning(f"Domain {domain} returned 403 Forbidden or empty for latest release scrape. Trying next...")
+                continue
                 
-            results.append({
-                "anime_title": anime_name,
-                "episode_num": ep_num,
-                "play_url": play_url,
-                "poster_url": poster_url
-            })
-        logger.info(f"Fetched {len(results)} latest released episodes from site")
-        return results
-    except Exception as e:
-        logger.warning(f"Error fetching latest site episodes: {e}")
-        return []
+            soup = BeautifulSoup(html_text, "html.parser")
+            items = soup.select(".anime-card-container, .episodes-card-container, div.anime-card-post, div.epcontent div.epcard")
+            if not items:
+                items = soup.select("div.content div.anime-card-details")
+                
+            for item in items[:15]:
+                a_tag = item.select_one("a")
+                if not a_tag or not a_tag.get("href"):
+                    continue
+                play_url = a_tag["href"]
+                title_tag = item.select_one(".anime-card-title, .epcard-title, h3, h2")
+                raw_title = title_tag.text.strip() if title_tag else a_tag.get("title", "")
+                
+                img_tag = item.select_one("img")
+                poster_url = img_tag.get("src") or img_tag.get("data-src") if img_tag else None
+                
+                if "الحلقة" in raw_title:
+                    parts = raw_title.split("الحلقة")
+                    anime_name = parts[0].strip(" -").strip()
+                    ep_num = parts[1].strip(" -").strip()
+                else:
+                    anime_name = raw_title
+                    ep_num = "1"
+                    
+                results.append({
+                    "anime_title": anime_name,
+                    "episode_num": ep_num,
+                    "play_url": play_url,
+                    "poster_url": poster_url
+                })
+            if results:
+                logger.info(f"Fetched {len(results)} latest released episodes from {domain}")
+                return results
+        except Exception as e:
+            logger.warning(f"Error fetching latest site episodes from {domain}: {e}")
+            
+    return []

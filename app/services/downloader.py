@@ -69,7 +69,7 @@ def get_referer_for_url(url: str) -> str:
         return "https://www.mp4upload.com/"
     if "yourupload" in url or "vidcache" in url:
         return "https://www.yourupload.com/"
-    return "https://witanime.life/"
+    return "https://witanime.pics/"
 
 async def get_url_file_size(url: str, session: aiohttp.ClientSession) -> int:
     """
