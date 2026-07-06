@@ -43,29 +43,26 @@ async def init_db():
             await conn.execute(text(f"DROP TABLE IF EXISTS download_cache{cascade_suffix};"))
         except Exception as e:
             print(f"Warning while dropping cache tables: {e}")
+            
         await conn.run_sync(Base.metadata.create_all)
-        try:
-            if not is_sqlite:
-                await conn.execute(text("ALTER TABLE telegram_file_cache ADD COLUMN IF NOT EXISTS file_size DOUBLE PRECISION;"))
-        except Exception as e:
-            print(f"Info on column migration for telegram_file_cache.file_size: {e}")
 
-        # Column migration for custom_buttons table
-        try:
-            if is_sqlite:
-                await conn.execute(text("ALTER TABLE custom_buttons ADD COLUMN response_text TEXT;"))
-            else:
-                await conn.execute(text("ALTER TABLE custom_buttons ADD COLUMN IF NOT EXISTS response_text TEXT;"))
-        except Exception as e:
-            print(f"Info on column migration for custom_buttons.response_text: {e}")
-
-        # Column migrations for users table
-        for col_name, col_type in [("first_name", "VARCHAR(255)"), ("last_name", "VARCHAR(255)"), ("is_blocked", "BOOLEAN DEFAULT FALSE")]:
+        async def add_column_if_missing(table_name: str, column_name: str, column_type: str):
             try:
                 if is_sqlite:
-                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN {col_name} {col_type};"))
+                    res = await conn.execute(text(f"PRAGMA table_info({table_name});"))
+                    existing_cols = [row[1] for row in res.fetchall()]
+                    if column_name not in existing_cols:
+                        await conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type};"))
                 else:
-                    await conn.execute(text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type};"))
-            except Exception:
-                pass
+                    await conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {column_name} {column_type};"))
+            except Exception as ex:
+                print(f"Info on column migration {table_name}.{column_name}: {ex}")
+
+        # Column migrations
+        await add_column_if_missing("custom_buttons", "response_text", "TEXT")
+        await add_column_if_missing("telegram_file_cache", "file_size", "DOUBLE PRECISION" if not is_sqlite else "REAL")
+        await add_column_if_missing("users", "first_name", "VARCHAR(255)")
+        await add_column_if_missing("users", "last_name", "VARCHAR(255)")
+        await add_column_if_missing("users", "is_blocked", "BOOLEAN DEFAULT FALSE")
+
     print("Database tables initialized successfully.")

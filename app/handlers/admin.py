@@ -21,6 +21,7 @@ class AdminStates(StatesGroup):
     waiting_for_custom_button_name = State()
     waiting_for_custom_button_response_text = State()
     waiting_for_static_msg_text = State()
+    waiting_for_notif_group_id = State()
 
 router = Router(name="admin")
 
