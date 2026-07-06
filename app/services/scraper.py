@@ -400,32 +400,34 @@ async def search_anime_scraper(title: str) -> List[Dict[str, Any]]:
         logger.info("[MOCK MODE] Simulating search result.")
         return [{"title": f"{title} (TV)", "slug": "mock-anime-slug"}]
 
-    # 1. Gogoanime first (Primary source)
-    gogo_results = await search_anime_gogoanime(title)
-    if gogo_results:
-        logger.info(f"Gogoanime returned {len(gogo_results)} results for '{title}'")
-        return gogo_results
-
-    logger.info(f"Gogoanime failed, falling back to WitAnime for: {title}")
-
-    # 2. WitAnime second (Fallback source)
+    # 1. WitAnime first (Primary source for Botanmie)
     search_queries = [
         f"?search_param=animes&s={quote(normalized_title)}",
         f"?s={quote(normalized_title)}"
     ]
 
     results = []
-    if CURL_CFFI_AVAILABLE and CurlAsyncSession:
-        proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
-        async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
-            results = await _run_scraper_search(session, title, search_queries)
-    else:
-        connector = get_connector()
-        async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
-            results = await _run_scraper_search(session, title, search_queries)
+    try:
+        if CURL_CFFI_AVAILABLE and CurlAsyncSession:
+            proxies = {"http": config.PROXY_URL, "https": config.PROXY_URL} if config.PROXY_URL else None
+            async with CurlAsyncSession(impersonate="chrome120", proxies=proxies) as session:
+                results = await _run_scraper_search(session, title, search_queries)
+        else:
+            connector = get_connector()
+            async with aiohttp.ClientSession(connector=connector, cookie_jar=get_global_cookie_jar()) as session:
+                results = await _run_scraper_search(session, title, search_queries)
+    except Exception as e:
+        logger.warning(f"WitAnime search failed: {e}")
 
     if results:
         return results
+
+    # 2. Gogoanime second (Fallback source)
+    logger.info(f"WitAnime search returned 0 results, falling back to Gogoanime for: {title}")
+    gogo_results = await search_anime_gogoanime(title)
+    if gogo_results:
+        logger.info(f"Gogoanime returned {len(gogo_results)} results for '{title}'")
+        return gogo_results
 
     # 3. Structural / Translation fallback
     logger.info(f"Primary search returned 0 results for '{title}'. Attempting structural/translation fallbacks...")
@@ -1560,7 +1562,8 @@ async def search_anime_gogoanime(title: str) -> List[Dict[str, Any]]:
         search_url = f"https://{domain}/search.html?keyword={quote(title)}"
         logger.info(f"Trying Gogoanime search on domain: {domain}")
         try:
-            async with aiohttp.ClientSession() as session:
+            connector = get_connector()
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(search_url, headers=get_browser_headers(search_url), timeout=4) as resp:
                     if resp.status != 200:
                         logger.warning(f"Gogoanime domain {domain} returned HTTP {resp.status}")
@@ -1589,7 +1592,8 @@ async def get_episodes_gogoanime(anime_slug: str) -> Dict[str, Any]:
     for domain in GOGOANIME_DOMAINS:
         url = f"https://{domain}/category/{anime_slug}"
         try:
-            async with aiohttp.ClientSession() as session:
+            connector = get_connector()
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(url, headers=get_browser_headers(url), timeout=15) as resp:
                     if resp.status != 200:
                         continue
@@ -1636,7 +1640,8 @@ async def get_download_links_gogoanime(play_url: str) -> Dict[str, str]:
             
         logger.info(f"Trying Gogoanime domain mirror: {domain}")
         try:
-            async with aiohttp.ClientSession() as session:
+            connector = get_connector()
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(target_url, headers=get_browser_headers(target_url), timeout=12) as resp:
                     if resp.status != 200:
                         logger.warning(f"Domain {domain} returned HTTP {resp.status}")
