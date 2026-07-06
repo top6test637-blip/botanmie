@@ -75,9 +75,25 @@ async def get_thumbnail_input(bot: Bot) -> Optional[BufferedInputFile]:
         logger.info(f"Downloading custom thumbnail file from Telegram file_id: {file_id}")
         file_info = await bot.get_file(file_id)
         if file_info and file_info.file_path:
-            logger.info(f"Downloading custom thumbnail from Telegram path: {file_info.file_path}")
+            file_path = file_info.file_path
+            # Extract standard relative path if Bot API server is running in local mode and returns absolute disk path
+            if "/" in file_path:
+                for prefix in ["photos/", "documents/", "video/", "voice/", "stickers/", "music/"]:
+                    if prefix in file_path:
+                        file_path = prefix + file_path.split(prefix, 1)[1]
+                        break
+            
+            logger.info(f"Downloading custom thumbnail from Telegram path: {file_path}")
             os.makedirs(os.path.dirname(raw_path), exist_ok=True)
-            await bot.download_file(file_info.file_path, destination=str(raw_path))
+            
+            dl_url = f"https://api.telegram.org/file/bot{config.BOT_TOKEN}/{file_path}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(dl_url, timeout=30) as resp:
+                    if resp.status == 200:
+                        with open(raw_path, "wb") as f:
+                            f.write(await resp.read())
+                    else:
+                        raise Exception(f"Official Telegram API returned status {resp.status}")
             
             if raw_path.exists() and raw_path.stat().st_size > 0:
                 success = prepare_telegram_thumbnail(raw_path, optimized_path)
