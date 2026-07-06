@@ -1588,28 +1588,42 @@ async def search_anime_gogoanime(title: str) -> List[Dict[str, Any]]:
     for domain in GOGOANIME_DOMAINS:
         search_url = f"https://{domain}/search.html?keyword={quote(title)}"
         logger.info(f"Trying Gogoanime search on domain: {domain}")
+        html = None
         try:
             connector = get_connector()
             async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(search_url, headers=get_browser_headers(search_url), timeout=4) as resp:
-                    if resp.status != 200:
+                    if resp.status == 200:
+                        html = await resp.text()
+                    else:
                         logger.warning(f"Gogoanime domain {domain} returned HTTP {resp.status}")
-                        continue
-                    html = await resp.text()
-                    soup = BeautifulSoup(html, "html.parser")
-                    items = soup.select("ul.items li a")
-                    results = []
-                    for a in items[:10]:
-                        href = a.get("href")
-                        if href and "/category/" in href:
-                            slug = href.split("/category/")[-1].strip("/")
-                            title_text = a.get("title") or a.text.strip()
-                            results.append({"title": title_text, "slug": slug})
-                    if results:
-                        logger.info(f"SUCCESS: Gogoanime ({domain}) returned {len(results)} search results for '{title}'")
-                        return results
         except Exception as e:
-            logger.warning(f"Gogoanime search failed on {domain}: {e}")
+            logger.warning(f"Gogoanime direct search failed on {domain}: {e}")
+
+        # Playwright fallback if direct connection fails or is blocked
+        if not html:
+            logger.info(f"Trying Playwright fallback for Gogoanime search on {domain}...")
+            try:
+                html = await get_html_headless(search_url)
+            except Exception as e:
+                logger.warning(f"Playwright fallback search failed on {domain}: {e}")
+
+        if html:
+            try:
+                soup = BeautifulSoup(html, "html.parser")
+                items = soup.select("ul.items li a")
+                results = []
+                for a in items[:10]:
+                    href = a.get("href")
+                    if href and "/category/" in href:
+                        slug = href.split("/category/")[-1].strip("/")
+                        title_text = a.get("title") or a.text.strip()
+                        results.append({"title": title_text, "slug": slug})
+                if results:
+                    logger.info(f"SUCCESS: Gogoanime ({domain}) returned {len(results)} search results for '{title}'")
+                    return results
+            except Exception as pe:
+                logger.error(f"Error parsing Gogoanime search results on {domain}: {pe}")
             
     logger.warning(f"All Gogoanime search domains failed for query: '{title}'")
     return []
@@ -1618,38 +1632,52 @@ async def get_episodes_gogoanime(anime_slug: str) -> Dict[str, Any]:
     logger.info(f"Fetching Gogoanime episodes for slug: {anime_slug}")
     for domain in GOGOANIME_DOMAINS:
         url = f"https://{domain}/category/{anime_slug}"
+        html = None
         try:
             connector = get_connector()
             async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(url, headers=get_browser_headers(url), timeout=15) as resp:
-                    if resp.status != 200:
-                        continue
-                    html = await resp.text()
-                    soup = BeautifulSoup(html, "html.parser")
-                    ep_list = soup.select("#episode_page li a")
-                    if not ep_list:
-                        ep_list = soup.select(".episodes-list a")
-                    episodes = []
-                    for a in ep_list:
-                        ep_num = a.text.strip()
-                        href = a.get("href")
-                        if href and "/" in href:
-                            ep_id = href.split("/")[-1].strip()
-                            if ep_id:
-                                episodes.append({
-                                    "ep_number": ep_num,
-                                    "play_url": f"https://{domain}/watch/{ep_id}"
-                                })
-                    if episodes:
-                        episodes.reverse()
-                        try:
-                            episodes.sort(key=lambda x: float(x["ep_number"]) if x["ep_number"].replace(".", "").isdigit() else 999999)
-                        except:
-                            pass
-                        logger.info(f"Gogoanime ({domain}) found {len(episodes)} episodes")
-                        return {"episodes": episodes}
+                    if resp.status == 200:
+                        html = await resp.text()
         except Exception as e:
-            logger.warning(f"Gogoanime episodes failed on {domain}: {e}")
+            logger.warning(f"Gogoanime direct episodes failed on {domain}: {e}")
+
+        # Playwright fallback
+        if not html:
+            logger.info(f"Trying Playwright fallback for Gogoanime episodes on {domain}...")
+            try:
+                html = await get_html_headless(url)
+            except Exception as e:
+                logger.warning(f"Playwright fallback episodes failed on {domain}: {e}")
+
+        if html:
+            try:
+                soup = BeautifulSoup(html, "html.parser")
+                ep_list = soup.select("#episode_page li a")
+                if not ep_list:
+                    ep_list = soup.select(".episodes-list a")
+                episodes = []
+                for a in ep_list:
+                    ep_num = a.text.strip()
+                    href = a.get("href")
+                    if href and "/" in href:
+                        ep_id = href.split("/")[-1].strip()
+                        if ep_id:
+                            episodes.append({
+                                "ep_number": ep_num,
+                                "play_url": f"https://{domain}/watch/{ep_id}"
+                            })
+                if episodes:
+                    episodes.reverse()
+                    try:
+                        episodes.sort(key=lambda x: float(x["ep_number"]) if x["ep_number"].replace(".", "").isdigit() else 999999)
+                    except:
+                        pass
+                    logger.info(f"Gogoanime ({domain}) found {len(episodes)} episodes")
+                    return {"episodes": episodes}
+            except Exception as pe:
+                logger.error(f"Error parsing Gogoanime episodes on {domain}: {pe}")
+                
     return {"episodes": []}
 
 async def get_download_links_gogoanime(play_url: str) -> Dict[str, str]:
@@ -1666,41 +1694,70 @@ async def get_download_links_gogoanime(play_url: str) -> Dict[str, str]:
             target_url = f"https://{domain}/{ep_slug}"
             
         logger.info(f"Trying Gogoanime domain mirror: {domain}")
+        html = None
         try:
             connector = get_connector()
             async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(target_url, headers=get_browser_headers(target_url), timeout=12) as resp:
-                    if resp.status != 200:
+                    if resp.status == 200:
+                        html = await resp.text()
+                    else:
                         logger.warning(f"Domain {domain} returned HTTP {resp.status}")
-                        continue
-                    html = await resp.text()
-                    soup = BeautifulSoup(html, "html.parser")
-                    
-                    # 1. Try iframe player embed
-                    iframe = soup.select_one("iframe")
-                    if iframe and iframe.get("src"):
-                        embed_url = iframe["src"]
-                        if embed_url.startswith("//"):
-                            embed_url = f"https:{embed_url}"
-                        async with session.get(embed_url, headers=get_browser_headers(embed_url), timeout=10) as embed_resp:
-                            if embed_resp.status == 200:
-                                embed_html = await embed_resp.text()
-                                video_src = re.search(r'["\'](https?://[^"\']+\.mp4[^"\']*)["\']', embed_html)
-                                if video_src:
-                                    logger.info(f"Resolved Gogoanime mp4 link on {domain}")
-                                    return {"720p": video_src.group(1)}
-                                hls_src = re.search(r'["\'](https?://[^"\']+\.m3u8[^"\']*)["\']', embed_html)
-                                if hls_src:
-                                    logger.info(f"Resolved Gogoanime m3u8 link on {domain}")
-                                    return {"720p": hls_src.group(1)}
-                    
-                    # 2. Direct regex scan for video sources
-                    hls_match = re.search(r'https?://[^\s"\'\\]+?\.m3u8[^\s"\'\\]*', html)
-                    if hls_match:
-                        logger.info(f"Resolved direct Gogoanime m3u8 on {domain}")
-                        return {"720p": hls_match.group(0)}
         except Exception as e:
-            logger.warning(f"Gogoanime download link resolution failed on {domain}: {e}")
+            logger.warning(f"Gogoanime direct links failed on {domain}: {e}")
+
+        # Playwright fallback
+        if not html:
+            logger.info(f"Trying Playwright fallback for Gogoanime watch page on {domain}...")
+            try:
+                html = await get_html_headless(target_url)
+            except Exception as e:
+                logger.warning(f"Playwright fallback watch page failed on {domain}: {e}")
+
+        if html:
+            try:
+                soup = BeautifulSoup(html, "html.parser")
+                
+                # 1. Try iframe player embed
+                iframe = soup.select_one("iframe")
+                if iframe and iframe.get("src"):
+                    embed_url = iframe["src"]
+                    if embed_url.startswith("//"):
+                        embed_url = f"https:{embed_url}"
+                    
+                    embed_html = None
+                    try:
+                        connector = get_connector()
+                        async with aiohttp.ClientSession(connector=connector) as session:
+                            async with session.get(embed_url, headers=get_browser_headers(embed_url), timeout=10) as embed_resp:
+                                if embed_resp.status == 200:
+                                    embed_html = await embed_resp.text()
+                    except Exception:
+                        pass
+                        
+                    if not embed_html:
+                        try:
+                            embed_html = await get_html_headless(embed_url)
+                        except Exception:
+                            pass
+                            
+                    if embed_html:
+                        video_src = re.search(r'["\'](https?://[^"\']+\.mp4[^"\']*)["\']', embed_html)
+                        if video_src:
+                            logger.info(f"Resolved Gogoanime mp4 link on {domain}")
+                            return {"720p": video_src.group(1)}
+                        hls_src = re.search(r'["\'](https?://[^"\']+\.m3u8[^"\']*)["\']', embed_html)
+                        if hls_src:
+                            logger.info(f"Resolved Gogoanime m3u8 link on {domain}")
+                            return {"720p": hls_src.group(1)}
+                
+                # 2. Direct regex scan for video sources
+                hls_match = re.search(r'https?://[^\s"\'\\]+?\.m3u8[^\s"\'\\]*', html)
+                if hls_match:
+                    logger.info(f"Resolved direct Gogoanime m3u8 on {domain}")
+                    return {"720p": hls_match.group(0)}
+            except Exception as pe:
+                logger.error(f"Error parsing Gogoanime download links on {domain}: {pe}")
             
     return {}
 
