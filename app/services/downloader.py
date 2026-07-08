@@ -887,7 +887,7 @@ async def process_and_send_video(
             f"⚙️ **الجودة:** `{quality}`\n"
             f"💾 **الحجم:** `{size_mb:.1f} ميجابايت`\n\n"
             f"🎥 **مشاهدة ممتعة!** ✨🍿\n\n"
-            f"📢 **عبر البوت:** {bot_username}"
+            f"📢 **البوت:** {bot_username}"
         )
         
         # Check for custom thumbnail File Path

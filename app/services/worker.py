@@ -629,8 +629,7 @@ async def execute_queued_task(
         nav_markup = InlineKeyboardMarkup(inline_keyboard=[nav_row])
         
         bot_info = await bot.get_me()
-        chans_list = [c.strip() if c.strip().startswith("@") else f"@{c.strip()}" for c in (config.CHANNEL_USERNAME or "").replace(",", " ").split() if c.strip()]
-        chan = " | ".join(chans_list) if chans_list else (f"@{bot_info.username}" if bot_info else "")
+        bot_username = f"@{bot_info.username}" if bot_info else ""
         
         import html
         size_caption = f"{cached_file_size:.1f} MB" if cached_file_size and cached_file_size > 0 else "سريع ⚡"
@@ -640,7 +639,7 @@ async def execute_queued_task(
             f"⚙️ <b>الجودة:</b> {cached_quality}\n"
             f"💾 <b>الحجم:</b> {size_caption}\n\n"
             f"🎥 <b>مشاهدة ممتعة!</b> ✨🍿\n"
-            f"📢 <b>القناة:</b> {chan}"
+            f"📢 <b>البوت:</b> {bot_username}"
         )
         thumb_input = await get_video_thumbnail(bot, db_session_factory, anilist_id)
         
@@ -780,8 +779,6 @@ async def execute_queued_task(
     bot_username = f"@{bot_info.username}" if bot_info else ""
     
     size_mb = size / (1024 * 1024)
-    chans_list = [c.strip() if c.strip().startswith("@") else f"@{c.strip()}" for c in (config.CHANNEL_USERNAME or "").replace(",", " ").split() if c.strip()]
-    chan = " | ".join(chans_list) if chans_list else (f"@{bot_info.username}" if bot_info else "")
         
     import html
     caption = (
@@ -790,7 +787,7 @@ async def execute_queued_task(
         f"⚙️ <b>الجودة:</b> {selected_quality}\n"
         f"💾 <b>الحجم:</b> {size_mb:.1f} MB\n\n"
         f"🎥 <b>مشاهدة ممتعة!</b> ✨🍿\n"
-        f"📢 <b>القناة:</b> {chan}"
+        f"📢 <b>البوت:</b> {bot_username}"
     )
 
     # If it is a Telegram file ID

@@ -23,6 +23,7 @@ class AdminStates(StatesGroup):
     waiting_for_static_msg_text = State()
     waiting_for_notif_group_id = State()
     waiting_for_ads_poster = State()
+    waiting_for_db_import = State()
 
 router = Router(name="admin")
 
@@ -754,9 +755,181 @@ async def handle_admin_content(callback: CallbackQuery, db_session: AsyncSession
     )
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💾 تصدير قاعدة البيانات (bot.db)", callback_data="admin_export_db")],
+        [InlineKeyboardButton(text="📥 استيراد/دمج قاعدة بيانات جديدة", callback_data="admin_import_db")],
         [InlineKeyboardButton(text="🔙 رجوع للوحة التحكم", callback_data="admin_home")]
     ])
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+
+@router.callback_query(F.data == "admin_import_db")
+async def handle_admin_import_db(callback: CallbackQuery, state: FSMContext, db_session: AsyncSession):
+    """Prompt admin to send a .db file for merging into the current database."""
+    authorized = await is_admin(callback.from_user.id, db_session)
+    if not authorized:
+        await safe_answer(callback, "❌ غير مصرح لك.", show_alert=True)
+        return
+    await safe_answer(callback)
+    await state.set_state(AdminStates.waiting_for_db_import)
+
+    cancel_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ إلغاء", callback_data="admin_content")]
+    ])
+    await callback.message.edit_text(
+        "📥 <b>استيراد ودمج قاعدة بيانات جديدة</b>\n\n"
+        "• أرسل ملف <code>.db</code> (SQLite) الآن وسيتم دمج بياناته مع القاعدة الحالية.\n"
+        "• <b>لن يتم حذف أي بيانات موجودة</b>، فقط إضافة السجلات الجديدة.\n"
+        "• الجداول المدعومة: <code>episode_cache</code>, <code>download_cache</code>, "
+        "<code>telegram_file_cache</code>, <code>search_cache</code>\n\n"
+        "<i>ملاحظة: إذا كان السجل موجوداً بالفعل (نفس المعرف/القيد الفريد) سيتم تجاهله تلقائياً.</i>",
+        reply_markup=cancel_kb,
+        parse_mode="HTML"
+    )
+
+
+@router.message(AdminStates.waiting_for_db_import)
+async def process_db_import(message: Message, state: FSMContext, db_session: AsyncSession):
+    """Receive a .db file and merge its data into the current database."""
+    authorized = await is_admin(message.from_user.id, db_session)
+    if not authorized:
+        await message.answer("❌ غير مصرح لك.")
+        await state.clear()
+        return
+
+    # Validate file
+    doc = message.document
+    if not doc or not doc.file_name or not doc.file_name.endswith(".db"):
+        await message.answer(
+            "⚠️ يرجى إرسال ملف قاعدة بيانات بامتداد <code>.db</code> فقط.",
+            parse_mode="HTML"
+        )
+        return
+
+    status_msg = await message.answer("⏳ <b>جارٍ تحميل الملف ومعالجته...</b>", parse_mode="HTML")
+
+    import tempfile
+    import os
+    import sqlite3
+    from aiogram.exceptions import TelegramBadRequest
+
+    tmp_path = None
+    try:
+        # Download the file to a temporary path
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp_file:
+            tmp_path = tmp_file.name
+
+        bot = message.bot
+        file_info = await bot.get_file(doc.file_id)
+        await bot.download_file(file_info.file_path, destination=tmp_path)
+
+        # Tables and their unique conflict columns
+        # Strategy: INSERT OR IGNORE (skip if unique constraint violated)
+        TABLES_CONFIG = {
+            "episode_cache": None,           # no unique constraint – use primary key
+            "download_cache": "play_url",    # unique on play_url
+            "telegram_file_cache": None,     # unique on (anilist_id, ep_number, quality)
+            "search_cache": None,            # unique on (query_text, anilist_id)
+        }
+
+        from config import config as _cfg
+        main_db_url = _cfg.DATABASE_URL
+        main_db_path = main_db_url.replace("sqlite+aiosqlite:///", "").replace("sqlite:///", "")
+        if not main_db_path.startswith("/") and not (len(main_db_path) > 1 and main_db_path[1] == ":"):
+            # Relative path – resolve from project root
+            main_db_path = str(Path(main_db_path).resolve())
+
+        stats = {}
+        # Use synchronous sqlite3 since we only need to merge, not use the async session for this
+        src_conn = sqlite3.connect(tmp_path)
+        dst_conn = sqlite3.connect(main_db_path)
+        src_conn.row_factory = sqlite3.Row
+
+        try:
+            src_cur = src_conn.cursor()
+            dst_cur = dst_conn.cursor()
+
+            for table in TABLES_CONFIG:
+                # Check table exists in source
+                src_cur.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+                )
+                if not src_cur.fetchone():
+                    stats[table] = {"skipped": 0, "imported": 0, "note": "not in source"}
+                    continue
+
+                # Get columns from source
+                src_cur.execute(f"PRAGMA table_info({table})")
+                cols_info = src_cur.fetchall()
+                cols = [c[1] for c in cols_info]  # column names
+                # Exclude 'id' primary key from insert so destination auto-increments
+                insert_cols = [c for c in cols if c != "id"]
+
+                placeholders = ", ".join(["?"] * len(insert_cols))
+                cols_str = ", ".join(insert_cols)
+                insert_sql = f"INSERT OR IGNORE INTO {table} ({cols_str}) VALUES ({placeholders})"
+
+                src_cur.execute(f"SELECT {cols_str} FROM {table}")
+                rows = src_cur.fetchall()
+
+                imported = 0
+                skipped = 0
+                for row in rows:
+                    try:
+                        dst_cur.execute(insert_sql, tuple(row))
+                        if dst_cur.rowcount > 0:
+                            imported += 1
+                        else:
+                            skipped += 1
+                    except sqlite3.IntegrityError:
+                        skipped += 1
+
+                dst_conn.commit()
+                stats[table] = {"imported": imported, "skipped": skipped}
+        finally:
+            src_conn.close()
+            dst_conn.close()
+
+        # Format report
+        table_labels = {
+            "episode_cache": "قائمة الحلقات",
+            "download_cache": "روابط التحميل",
+            "telegram_file_cache": "ملفات تلغرام المخزنة",
+            "search_cache": "نتائج البحث",
+        }
+        lines = ["✅ <b>تم الدمج بنجاح! تقرير الاستيراد:</b>\n"]
+        total_imported = 0
+        for tbl, s in stats.items():
+            label = table_labels.get(tbl, tbl)
+            if s.get("note"):
+                lines.append(f"• {label}: <i>{s['note']}</i>")
+            else:
+                lines.append(
+                    f"• {label}: ✅ <b>{s['imported']}</b> مضاف، "
+                    f"⏭️ {s['skipped']} موجود مسبقاً (تم تجاهله)"
+                )
+                total_imported += s["imported"]
+        lines.append(f"\n<b>إجمالي السجلات المضافة: {total_imported}</b>")
+
+        await state.clear()
+        home_kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📝 العودة للمحتوى", callback_data="admin_content")],
+            [InlineKeyboardButton(text="🏠 الرئيسية", callback_data="admin_home")]
+        ])
+        await status_msg.edit_text("\n".join(lines), reply_markup=home_kb, parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"DB import failed: {e}", exc_info=True)
+        import html as _html
+        await state.clear()
+        await status_msg.edit_text(
+            f"❌ <b>فشل الدمج:</b> {_html.escape(str(e))}",
+            parse_mode="HTML"
+        )
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
 
 @router.callback_query(F.data == "admin_settings")
 async def handle_admin_settings(callback: CallbackQuery, db_session: AsyncSession):
